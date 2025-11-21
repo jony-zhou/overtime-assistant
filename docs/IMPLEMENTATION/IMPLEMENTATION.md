@@ -152,7 +152,7 @@ pyinstaller overtime_calculator.spec --clean --noconfirm
 
 # 4. GitHub 建立 Release
 # Tag: v1.1.0
-# 上傳: dist/TECO加班計算器.exe
+# 上傳: dist/overtime-assistant-1.1.0.exe
 ```
 
 ### 程式化使用

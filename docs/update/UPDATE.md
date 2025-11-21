@@ -33,7 +33,7 @@
 ### 手動更新步驟
 
 1. 點擊「前往下載頁面」按鈕
-2. 在瀏覽器中下載最新版 `TECO加班計算器.exe`
+2. 在瀏覽器中下載最新版 `overtime-assistant-x.x.x.exe`
 3. 關閉舊版程式
 4. 用新版執行檔替換舊版
 5. 執行新版程式
@@ -94,6 +94,7 @@ del cache\update_cache.json
 4. 在 GitHub 建立新 Release:
    - Tag: `v1.1.0`
    - Title: `v1.1.0 - 新版本名稱`
+   - 上傳 `dist/overtime-assistant-1.1.0.exe`
    - 上傳 `dist/TECO加班計算器.exe`
    - 填寫更新說明
 

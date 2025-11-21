@@ -43,7 +43,7 @@ pyinstaller overtime_calculator.spec
 
 ## 輸出位置
 
-- `dist/TECO加班計算器.exe`: 執行檔
+- `dist/overtime-assistant-x.x.x.exe`: 執行檔 (版本號會自動帶入檔名)
 - `build/`: 暫存建置檔案
 
 ## 測試執行檔

@@ -49,7 +49,7 @@ python app.py
 .\venv\Scripts\python.exe -m PyInstaller overtime_calculator.spec
 ```
 
-執行檔位於 `dist/TECO加班計算器.exe`
+執行檔位於 `dist/overtime-assistant-1.0.1.exe`
 
 ### 圖示檔案
 
