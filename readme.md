@@ -4,7 +4,7 @@
 
 現代化的圖形介面應用程式,自動登入 TECO SSP 系統,抓取出勤異常清單資料,並計算每日加班時數。
 
-### GUI 版本特色 (v1.0.0)
+### GUI 版本特色 (v1.0.1)
 
 - 🎨 **現代化介面**: 基於 CustomTkinter 的深色主題 GUI
 - 🔐 **便捷登入**: 圖形化登入介面,背景執行不阻塞
@@ -31,8 +31,10 @@
 
 直接執行打包好的程式:
 ```bash
-dist\TECO加班計算器.exe
+dist\overtime-assistant-1.0.1.exe
 ```
+
+**提示**: 檔名包含版本號,每次更新後版本號會自動變更
 
 ### 方法 2: 從原始碼執行
 
@@ -94,7 +96,8 @@ python app.py
 ```
 src/
 ├── core/              # 核心業務邏輯
-│   └── calculator.py  # OvertimeCalculator 加班計算類別
+│   ├── calculator.py  # OvertimeCalculator 加班計算類別
+│   └── version.py     # 版本管理 (單一真實來源)
 ├── models/            # 資料模型
 │   ├── attendance.py  # AttendanceRecord 出勤記錄
 │   └── report.py      # OvertimeReport 報表模型
@@ -156,6 +159,27 @@ ui/
 8. **資料夾**: 程式會自動建立 `reports/` 和 `logs/` 資料夾
 
 ## 客製化調整
+
+### 修改版本號
+
+**重要**: 版本號採用單一真實來源 (SSOT) 設計,只需修改一處!
+
+編輯 `src/core/version.py`:
+
+```python
+VERSION = "1.0.2"  # 修改版本號
+VERSION_NAME = "新功能說明"
+```
+
+重新封裝時會自動使用新版本號:
+```bash
+python -m PyInstaller overtime_calculator.spec --clean
+# 產生: overtime-assistant-1.0.2.exe
+```
+
+詳細版本管理說明請參考 [docs/development/VERSION_MANAGEMENT.md](docs/development/VERSION_MANAGEMENT.md)
+
+---
 
 ### 修改時間設定
 
@@ -244,6 +268,12 @@ logger.setLevel(logging.DEBUG)  # DEBUG, INFO, WARNING, ERROR
 本程式僅供個人使用,請勿用於非法用途。使用本程式所產生的任何後果由使用者自行承擔。
 
 ## 更新記錄
+
+### v1.0.1 (2025/11/21): 修正打包檔名 🔧
+
+**Bug 修正**:
+- 🔧 修正打包檔名為 `overtime-assistant-1.0.1.exe`
+- 🔧 解決中文檔名在 GitHub Releases 的相容性問題
 
 ### v1.0.0 (2025/11/21): 首個正式版 🎉
 
