@@ -10,10 +10,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.models import OvertimeReport
-from src.services import AuthService, DataService, ExportService
-from src.core import OvertimeCalculator
+from src.services import AuthService, DataService, ExportService, UpdateService
+from src.core import OvertimeCalculator, VERSION
 from src.config import Settings
-from ui.components import LoginFrame, ReportFrame, StatusFrame
+from ui.components import LoginFrame, ReportFrame, StatusFrame, show_update_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class MainWindow(ctk.CTk):
         super().__init__()
         
         # 設定視窗
-        self.title("TECO SSP 加班時數計算器 v2.0")
+        self.title(f"TECO SSP 加班時數計算器 v{VERSION}")
         self.geometry("900x700")
         
         # 設定圖示 (優先使用 .ico 格式)
@@ -65,6 +65,9 @@ class MainWindow(ctk.CTk):
         
         # 建立 UI
         self._create_ui()
+        
+        # 啟動後檢查更新 (非阻塞式,不影響正常使用)
+        self.after(1000, self._check_for_updates)
     
     def _create_ui(self):
         """建立使用者介面"""
@@ -259,3 +262,23 @@ class MainWindow(ctk.CTk):
         
         # 顯示訊息
         self.status_frame.show_status("已登出", "info")
+    
+    def _check_for_updates(self):
+        """背景檢查版本更新"""
+        logger.debug("開始檢查更新...")
+        
+        def check_thread():
+            try:
+                update_service = UpdateService()
+                update_info = update_service.check_for_updates(timeout=5)
+                
+                # 在主執行緒顯示對話框
+                if update_info and update_info.get('has_update'):
+                    self.after(0, lambda: show_update_dialog(self, update_info))
+                
+            except Exception as e:
+                # 更新檢查失敗不影響主程式
+                logger.debug(f"更新檢查失敗: {e}")
+        
+        thread = threading.Thread(target=check_thread, daemon=True)
+        thread.start()
