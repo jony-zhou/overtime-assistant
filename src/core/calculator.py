@@ -64,8 +64,8 @@ class OvertimeCalculator:
                 # 計算加班時數 = 總時間 - 午休 - 正常上班時間 - 休息時間
                 overtime_minutes = total_minutes - self.settings.LUNCH_BREAK - self.settings.WORK_HOURS - self.settings.REST_TIME
                 
-                # 轉換為小時(保留一位小數)
-                overtime_hours = round(overtime_minutes / 60, 1)
+                # 轉換為小時(保留二位小數)
+                overtime_hours = round(overtime_minutes / 60, 2)
                 
                 # 限制加班時數範圍
                 if overtime_hours < 0:
