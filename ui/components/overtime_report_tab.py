@@ -86,18 +86,6 @@ class OvertimeReportTab(ctk.CTkFrame):
         action_group = ctk.CTkFrame(button_frame, fg_color="transparent")
         action_group.pack(side="left")
         
-        self.preview_button = ctk.CTkButton(
-            action_group,
-            text="👁 預覽填寫",
-            command=self.on_preview,
-            **get_font_config("body"),
-            fg_color=colors.primary,
-            hover_color=colors.primary_hover,
-            height=36,
-            corner_radius=border_radius.sm
-        )
-        self.preview_button.pack(side="left", padx=(0, spacing.sm))
-        
         self.submit_button = ctk.CTkButton(
             action_group,
             text="✓ 送出申請",
@@ -142,7 +130,6 @@ class OvertimeReportTab(ctk.CTkFrame):
         self.refresh_button.pack(side="left")
         
         # 預設禁用主要操作按鈕
-        self.preview_button.configure(state="disabled")
         self.submit_button.configure(state="disabled")
     
     def _create_records_frame(self):
@@ -228,22 +215,19 @@ class OvertimeReportTab(ctk.CTkFrame):
         for widget in self.records_container.winfo_children():
             widget.destroy()
         
-        # 重新建立容器
-        self.loading_container = ctk.CTkFrame(
-            self.records_container,
-            fg_color="transparent"
-        )
-        self.loading_container.pack(expand=True, fill="both", pady=spacing.xl)
-        
         # 顯示載入提示
         self.loading_label = ctk.CTkLabel(
-            self.loading_container,
+            self.records_container,
             text="⏳ 正在載入加班記錄...\n\n正在查詢已申請狀態,請稍候",
             **get_font_config("body"),
             text_color=colors.info,
             justify="center"
         )
-        self.loading_label.pack(pady=spacing.xl)
+        self.loading_label.pack(expand=True, pady=spacing.xl)
+        
+        # 更新按鈕狀態
+        self.submit_button.configure(state="disabled")
+        self.select_all_button.configure(state="disabled")
         
         # 更新狀態訊息
         self._show_status("🔍 正在查詢已申請狀態...", colors.info)
@@ -290,6 +274,10 @@ class OvertimeReportTab(ctk.CTkFrame):
         # 建立每筆記錄的 UI
         for record in self.submission_records:
             self._create_record_item(record)
+        
+        # 啟用按鈕
+        self.submit_button.configure(state="normal")
+        self.select_all_button.configure(state="normal")
         
         # 更新狀態
         self._update_status()
@@ -364,14 +352,47 @@ class OvertimeReportTab(ctk.CTkFrame):
             )
             content_label.pack(side="left", padx=spacing.sm)
         
-        # 時數 (小時)
-        hours_label = ctk.CTkLabel(
-            item_frame,
-            text=f"{record.overtime_hours:.1f} hr",
-            **get_font_config("body"),
-            width=70
-        )
-        hours_label.pack(side="left", padx=spacing.sm)
+        # 時數 (小時 - 可編輯)
+        if not record.is_submitted:
+            hours_var = ctk.StringVar(value=f"{record.overtime_hours:.2f}")
+            hours_entry = ctk.CTkEntry(
+                item_frame,
+                textvariable=hours_var,
+                **get_font_config("body"),
+                width=70,
+                justify="center"
+            )
+            
+            def on_hours_change(e):
+                try:
+                    new_hours = float(hours_var.get())
+                    if new_hours >= 0:
+                        record.overtime_hours = round(new_hours, 2)
+                        hours_var.set(f"{record.overtime_hours:.2f}")
+                except ValueError:
+                    pass  # 不合法輸入不更新
+            
+            hours_entry.bind("<FocusOut>", on_hours_change)
+            hours_entry.bind("<Return>", on_hours_change)
+            hours_entry.pack(side="left", padx=spacing.sm)
+            
+            # 單位標籤
+            unit_label = ctk.CTkLabel(
+                item_frame,
+                text="hr",
+                **get_font_config("body"),
+                text_color=colors.text_tertiary,
+                width=30
+            )
+            unit_label.pack(side="left")
+        else:
+            hours_label = ctk.CTkLabel(
+                item_frame,
+                text=f"{record.overtime_hours:.2f} hr",
+                **get_font_config("body"),
+                width=70
+            )
+            hours_label.pack(side="left", padx=spacing.sm)
         
         # 加班/調休選擇
         if not record.is_submitted:
@@ -418,7 +439,6 @@ class OvertimeReportTab(ctk.CTkFrame):
         
         # 更新按鈕狀態
         has_selection = len(selected) > 0
-        self.preview_button.configure(state="normal" if has_selection else "disabled")
         self.submit_button.configure(state="normal" if has_selection else "disabled")
     
     def on_select_all(self):
@@ -436,57 +456,6 @@ class OvertimeReportTab(ctk.CTkFrame):
         
         # 更新按鈕文字
         self.select_all_button.configure(text="取消全選" if not all_selected else "全選")
-    
-    def on_preview(self):
-        """預覽填寫"""
-        selected = [r for r in self.submission_records if r.is_selected]
-        
-        if not selected:
-            messagebox.showwarning("提示", "請至少勾選一筆記錄")
-            return
-        
-        # 驗證加班內容
-        for record in selected:
-            if not record.description.strip():
-                messagebox.showerror("錯誤", f"{record.date} 的加班內容為空,請填寫")
-                return
-        
-        # 背景執行緒執行預覽
-        self._show_status("正在預覽填寫...", colors.info)
-        threading.Thread(
-            target=self._do_preview,
-            args=(selected,),
-            daemon=True
-        ).start()
-    
-    def _do_preview(self, records: List[OvertimeSubmissionRecord]):
-        """執行預覽 (背景執行緒)"""
-        try:
-            if not self.session:
-                return
-                
-            result = self.report_service.preview_form(self.session, records)
-            
-            if result['success']:
-                # 顯示預覽結果
-                preview_text = "\n".join([
-                    f"日期: {d['date']}, 內容: {d['description']}, 時數: {d['overtime_minutes'] if d['type'] == '加班' else d['change_minutes']}分, 類型: {d['type']}"
-                    for d in result['preview_data']
-                ])
-                
-                self.after(0, lambda: messagebox.showinfo(
-                    "預覽結果",
-                    f"即將填寫 {result['records_count']} 筆記錄:\n\n{preview_text}"
-                ))
-                self.after(0, lambda: self._show_status("預覽成功", colors.success))
-            else:
-                self.after(0, lambda: messagebox.showerror("錯誤", result.get('error', '預覽失敗')))
-                self.after(0, lambda: self._show_status("預覽失敗", colors.error))
-                
-        except Exception as error:
-            logger.error("預覽失敗: %s", error)
-            self.after(0, lambda: messagebox.showerror("錯誤", str(error)))
-            self.after(0, lambda: self._show_status(f"預覽失敗: {error}", colors.error))
     
     def on_submit(self):
         """送出申請"""

@@ -15,13 +15,15 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.models import OvertimeReport
+from src.models.personal_record import PersonalRecord, PersonalRecordSummary
 from src.services import AuthService, DataService, ExportService, UpdateService
+from src.services.personal_record_service import PersonalRecordService
 from src.services.credential_manager import CredentialManager
 from src.core import OvertimeCalculator, VERSION
 from src.config import Settings
 from ui.components import (
     LoginFrame, ReportFrame, show_update_dialog,
-    OvertimeReportTab, AttendanceTab
+    OvertimeReportTab, AttendanceTab, PersonalRecordTab
 )
 from ui.components.statistics_card import StatisticsCard
 from ui.config import (
@@ -46,10 +48,11 @@ class MainWindow(ctk.CTk):
         super().__init__()
         
         # 統計卡片屬性 (初始化為 None,稍後建立)
-        self.card_total_days: Optional[StatisticsCard] = None
+        self.card_total_records: Optional[StatisticsCard] = None
         self.card_total_hours: Optional[StatisticsCard] = None
         self.card_avg_hours: Optional[StatisticsCard] = None
         self.card_max_hours: Optional[StatisticsCard] = None
+        self.card_unreported: Optional[StatisticsCard] = None
         
         # 初始化屬性
         self.version = VERSION
@@ -105,6 +108,9 @@ class MainWindow(ctk.CTk):
     def _init_data(self):
         """初始化資料"""
         self.current_report: Optional[OvertimeReport] = None
+        self.personal_records: list[PersonalRecord] = []
+        self.personal_summary: Optional[PersonalRecordSummary] = None
+        self.personal_record_service: Optional[PersonalRecordService] = None
         self._login_username: Optional[str] = None
         self._login_password: Optional[str] = None
         self._remember_me: bool = False
@@ -298,8 +304,15 @@ class MainWindow(ctk.CTk):
         )
         self.attendance_tab.pack(fill="both", expand=True, padx=0, pady=0)
         
-        # 預設顯示加班補報分頁
-        self.tabview.set("⚙️ 加班補報")
+        # 建立分頁 3: 個人記錄
+        self.tabview.add("📊 個人記錄")
+        self.personal_record_tab = PersonalRecordTab(self.tabview.tab("📊 個人記錄"))
+        self.personal_record_tab.pack(fill="both", expand=True, padx=0, pady=0)
+        # 覆寫重新整理方法
+        self.personal_record_tab.on_refresh = self.on_refresh_personal_records
+        
+        # 預設顯示異常清單分頁
+        self.tabview.set("📅 異常清單")
     
     def _create_statistics_section(self):
         """建立統計卡片區域 (始終顯示)"""
@@ -309,8 +322,8 @@ class MainWindow(ctk.CTk):
         )
         self.stats_container.pack(fill="x", padx=spacing.lg, pady=spacing.md)
         
-        # Grid 布局 (4 欄)
-        self.stats_container.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        # Grid 布局 (5 欄)
+        self.stats_container.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
         
         # 建立 4 張統計卡片
         self._create_statistics_cards()
@@ -319,10 +332,10 @@ class MainWindow(ctk.CTk):
         """建立統計卡片"""
         from ui.components.statistics_card import StatisticsCard
         
-        # 卡片配置
+        # 卡片配置 (5張: 前4張來自個人記錄,第5張來自異常清單)
         cards_config = [
             {
-                "attr": "card_total_days",
+                "attr": "card_total_records",
                 "title": "總筆數",
                 "value": "0",
                 "icon": "📅",
@@ -352,6 +365,14 @@ class MainWindow(ctk.CTk):
                 "icon": "🔥",
                 "color": colors.warning,
                 "column": 3
+            },
+            {
+                "attr": "card_unreported",
+                "title": "未報加班數",
+                "value": "0",
+                "icon": "⚠️",
+                "color": colors.error,
+                "column": 4
             }
         ]
         
@@ -487,6 +508,9 @@ class MainWindow(ctk.CTk):
             self.settings
         )
         
+        # 建立個人記錄服務
+        self.personal_record_service = PersonalRecordService(self.settings.SSP_BASE_URL)
+        
         # 抓取資料
         self.fetch_data()
     
@@ -503,29 +527,49 @@ class MainWindow(ctk.CTk):
             callback=self._on_fetch_complete
         )
     
-    def _fetch_data_task(self) -> tuple[Optional[OvertimeReport], Optional[str]]:
+    def _fetch_data_task(self) -> tuple[Optional[OvertimeReport], Optional[str], list[PersonalRecord], Optional[PersonalRecordSummary]]:
         """
         資料抓取任務 (背景執行)
         
         Returns:
-            tuple: (報表資料, 錯誤訊息)
+            tuple: (報表資料, 錯誤訊息, 個人記錄, 個人記錄摘要)
         """
         try:
+            # 抓取出勤異常資料
             raw_records = self.data_service.get_attendance_data()
             
             if not raw_records:
-                return (None, "沒有找到出勤記錄")
+                return (None, "沒有找到出勤記錄", [], None)
             
             report = self.calculator.calculate_overtime(raw_records)
-            return (report, None)
+            
+            # 同時抓取個人記錄
+            personal_records, personal_summary = [], None
+            try:
+                if self.personal_record_service and self.auth_service:
+                    session = self.auth_service.get_session()
+                    personal_records, personal_summary = self.personal_record_service.fetch_personal_records(session)
+                    logger.info(f"成功載入個人記錄: {len(personal_records)} 筆")
+            except Exception as e:
+                logger.warning(f"個人記錄載入失敗 (不影響主功能): {e}")
+            
+            return (report, None, personal_records, personal_summary)
             
         except Exception as e:
             logger.error(f"抓取資料錯誤: {e}", exc_info=True)
-            return (None, str(e))
+            return (None, str(e), [], None)
     
-    def _on_fetch_complete(self, result: tuple[Optional[OvertimeReport], Optional[str]]):
+    def _on_fetch_complete(self, result: tuple[Optional[OvertimeReport], Optional[str], list[PersonalRecord], Optional[PersonalRecordSummary]]):
         """資料抓取完成回調"""
-        report, error = result
+        report, error, personal_records, personal_summary = result
+        
+        # 儲存個人記錄
+        self.personal_records = personal_records
+        self.personal_summary = personal_summary
+        
+        # 顯示個人記錄
+        if personal_records and personal_summary:
+            self.personal_record_tab.display_records(personal_records, personal_summary)
         
         if report and report.records:
             self._handle_successful_fetch(report)
@@ -553,28 +597,39 @@ class MainWindow(ctk.CTk):
         self._update_timestamp()
     
     def _update_statistics_cards(self, report: OvertimeReport):
-        """更新統計卡片數據"""
-        if not all([self.card_total_days, self.card_total_hours, 
-                    self.card_avg_hours, self.card_max_hours]):
+        """更新統計卡片數據 (使用個人記錄 + 異常清單)"""
+        if not all([self.card_total_records, self.card_total_hours, 
+                    self.card_avg_hours, self.card_max_hours, self.card_unreported]):
             return
         
-        # 總筆數
-        self.card_total_days.update_value(str(report.total_days))
+        # 如果有個人記錄摘要,使用個人記錄資料
+        if self.personal_summary:
+            # 總筆數
+            self.card_total_records.update_value(str(self.personal_summary.total_records))
+            
+            # 總加班時數
+            self.card_total_hours.update_value(
+                f"{self.personal_summary.total_overtime_hours:.1f} 小時"
+            )
+            
+            # 平均加班時數
+            self.card_avg_hours.update_value(
+                f"{self.personal_summary.average_overtime_hours:.1f} 小時"
+            )
+            
+            # 最高加班時數
+            self.card_max_hours.update_value(
+                f"{self.personal_summary.max_overtime_hours:.1f} 小時"
+            )
+        else:
+            # 沒有個人記錄時,使用 0
+            self.card_total_records.update_value("0")
+            self.card_total_hours.update_value("0.0 小時")
+            self.card_avg_hours.update_value("0.0 小時")
+            self.card_max_hours.update_value("0.0 小時")
         
-        # 總加班時數
-        self.card_total_hours.update_value(
-            f"{report.total_overtime_hours:.1f} 小時"
-        )
-        
-        # 平均加班時數
-        self.card_avg_hours.update_value(
-            f"{report.average_overtime_hours:.1f} 小時"
-        )
-        
-        # 最高加班時數
-        self.card_max_hours.update_value(
-            f"{report.max_overtime_hours:.1f} 小時"
-        )
+        # 未報加班數 (來自異常清單)
+        self.card_unreported.update_value(str(report.total_days))
     
     def _show_report(self, report: OvertimeReport):
         """
@@ -637,6 +692,50 @@ class MainWindow(ctk.CTk):
         # 分頁模式不需要隱藏元件,直接重新抓取
         self.fetch_data()
     
+    def on_refresh_personal_records(self):
+        """重新整理個人記錄 (僅載入個人記錄資料)"""
+        if not self.personal_record_service or not self.auth_service:
+            mb.showerror("錯誤", "請先登入")
+            return
+        
+        self._execute_in_background(
+            self._fetch_personal_records_task,
+            callback=self._on_personal_records_complete
+        )
+    
+    def _fetch_personal_records_task(self) -> tuple[list[PersonalRecord], Optional[PersonalRecordSummary], Optional[str]]:
+        """
+        個人記錄抓取任務 (背景執行)
+        
+        Returns:
+            tuple: (個人記錄列表, 摘要, 錯誤訊息)
+        """
+        try:
+            session = self.auth_service.get_session()
+            personal_records, personal_summary = self.personal_record_service.fetch_personal_records(session)
+            return (personal_records, personal_summary, None)
+        except Exception as e:
+            logger.error(f"個人記錄載入錯誤: {e}", exc_info=True)
+            return ([], None, str(e))
+    
+    def _on_personal_records_complete(self, result: tuple[list[PersonalRecord], Optional[PersonalRecordSummary], Optional[str]]):
+        """個人記錄載入完成回調"""
+        personal_records, personal_summary, error = result
+        
+        if personal_records and personal_summary:
+            self.personal_records = personal_records
+            self.personal_summary = personal_summary
+            self.personal_record_tab.display_records(personal_records, personal_summary)
+            
+            # 更新統計卡片 (如果有異常清單資料)
+            if self.current_report:
+                self._update_statistics_cards(self.current_report)
+            
+            mb.showinfo("成功", f"成功載入 {len(personal_records)} 筆個人記錄")
+        else:
+            error_msg = f"載入個人記錄失敗: {error}" if error else "載入個人記錄失敗"
+            mb.showerror("錯誤", error_msg)
+    
     def on_logout(self):
         """
         登出處理
@@ -660,8 +759,15 @@ class MainWindow(ctk.CTk):
         """
         self.auth_service = None
         self.data_service = None
+        self.personal_record_service = None
         self.current_report = None
+        self.personal_records = []
+        self.personal_summary = None
         self._login_password = None  # 清除密碼
+        
+        # 清空個人記錄分頁
+        if hasattr(self, 'personal_record_tab'):
+            self.personal_record_tab.clear_table()
     
     def _switch_to_login_page(self):
         """切換到登入頁面 (分頁模式)"""
