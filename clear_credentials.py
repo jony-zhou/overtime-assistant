@@ -5,11 +5,10 @@
 
 import sys
 from pathlib import Path
+from src.services.credential_manager import CredentialManager
 
 # 加入專案根目錄到路徑
 sys.path.insert(0, str(Path(__file__).parent))
-
-from src.services.credential_manager import CredentialManager
 
 
 def main():
