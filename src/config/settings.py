@@ -1,6 +1,6 @@
 """系統設定"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -21,7 +21,15 @@ class Settings:
     STANDARD_START_HOUR: int = 9
 
     # 加班補報設定
-    DEFAULT_OVERTIME_DESCRIPTION: str = "加班作業"
+    DEFAULT_OVERTIME_DESCRIPTION: str = "專案開發"
+    OVERTIME_DESCRIPTION_TEMPLATES: tuple[str, ...] = field(
+        default_factory=lambda: (
+            "售前調查",
+            "專案開發",
+            "專案維護",
+            "客戶支援",
+        )
+    )
     ENABLE_SUBMISSION: bool = True  # Beta 版本預設禁用送出功能
 
     # 日期格式
