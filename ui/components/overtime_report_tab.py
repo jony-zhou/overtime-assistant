@@ -8,7 +8,11 @@ from tkinter import messagebox
 from requests import Session
 
 from src.models import OvertimeSubmissionRecord, SubmittedRecord
-from src.services import OvertimeReportService, OvertimeStatusService
+from src.services import (
+    OvertimeReportService,
+    OvertimeStatusService,
+    TemplateManager,
+)
 from src.config import Settings
 from ui.config.design_system import colors, typography, spacing, border_radius
 
@@ -69,17 +73,32 @@ class OvertimeReportTab(ctk.CTkFrame):
     - 預覽和送出表單
     """
 
-    def __init__(self, master, **kwargs):
+    def __init__(
+        self, master, template_manager: Optional[TemplateManager] = None, **kwargs
+    ):
         super().__init__(master, **kwargs)
 
         self.settings = Settings()
         self.report_service = OvertimeReportService(self.settings)
         self.status_service = OvertimeStatusService(self.settings)
+        self.template_manager = template_manager or TemplateManager(
+            default_templates=self.settings.OVERTIME_DESCRIPTION_TEMPLATES
+        )
 
         # 資料
         self.submission_records: List[OvertimeSubmissionRecord] = []
         self.submitted_records: Dict[str, SubmittedRecord] = {}
         self.session: Optional[Session] = None  # 登入的 session
+
+        # 範本與輸入欄位管理
+        self.record_content_entries: Dict[int, ctk.CTkEntry] = {}
+        self.template_placeholder = "套用範本"
+        self.template_var = ctk.StringVar(master=self, value=self.template_placeholder)
+        self.template_menu: Optional[ctk.CTkOptionMenu] = None
+        self.manage_template_button: Optional[ctk.CTkButton] = None
+        self.template_values: List[str] = []
+        self.template_dialog: Optional[ctk.CTkToplevel] = None
+        self.template_editor: Optional[ctk.CTkTextbox] = None
 
         # 建立 UI
         self._create_ui()
@@ -132,6 +151,30 @@ class OvertimeReportTab(ctk.CTkFrame):
         # 右側: 次要操作按鈕組
         utility_group = ctk.CTkFrame(button_frame, fg_color="transparent")
         utility_group.pack(side="right")
+
+        self.template_menu = ctk.CTkOptionMenu(
+            utility_group,
+            variable=self.template_var,
+            values=[self.template_placeholder],
+            command=self.on_template_selected,
+            **get_font_config("body"),
+        )
+        self.template_menu.pack(side="left", padx=(0, spacing.sm))
+
+        self.manage_template_button = ctk.CTkButton(
+            utility_group,
+            text="✎ 管理範本",
+            command=self._open_template_manager,
+            **get_font_config("body"),
+            fg_color=colors.background_tertiary,
+            hover_color=colors.border_medium,
+            text_color=colors.text_secondary,
+            height=36,
+            corner_radius=border_radius.sm,
+        )
+        self.manage_template_button.pack(side="left", padx=(0, spacing.sm))
+
+        self._refresh_template_menu()
 
         self.select_all_button = ctk.CTkButton(
             utility_group,
@@ -248,6 +291,8 @@ class OvertimeReportTab(ctk.CTkFrame):
         for widget in self.records_container.winfo_children():
             widget.destroy()
 
+        self.record_content_entries.clear()
+
         # 顯示載入提示
         self.loading_label = ctk.CTkLabel(
             self.records_container,
@@ -309,6 +354,7 @@ class OvertimeReportTab(ctk.CTkFrame):
             return
 
         # 建立每筆記錄的 UI
+        self.record_content_entries.clear()
         for record in self.submission_records:
             self._create_record_item(record)
 
@@ -395,7 +441,9 @@ class OvertimeReportTab(ctk.CTkFrame):
 
             content_entry.bind("<KeyRelease>", on_content_change)
             content_entry.pack(side="left", padx=spacing.sm)
+            self.record_content_entries[id(record)] = content_entry
         else:
+            self.record_content_entries.pop(id(record), None)
             content_label = ctk.CTkLabel(
                 item_frame,
                 text=record.description,
@@ -515,6 +563,152 @@ class OvertimeReportTab(ctk.CTkFrame):
         self.select_all_button.configure(
             text="取消全選" if not all_selected else "全選"
         )
+
+    def on_template_selected(self, template: str):
+        """將範本內容套用至記錄"""
+        if not template or template == self.template_placeholder:
+            return
+
+        self._apply_template_to_records(template)
+
+        if self.template_var is not None:
+            self.template_var.set(self.template_placeholder)
+
+    def _apply_template_to_records(self, template: str):
+        """套用範本至選取的記錄,若未選取則套用全部未送出記錄"""
+        targets = [
+            r for r in self.submission_records if r.is_selected and not r.is_submitted
+        ]
+        if not targets:
+            targets = [r for r in self.submission_records if not r.is_submitted]
+
+        if not targets:
+            return
+
+        for record in targets:
+            record.description = template
+            entry = self.record_content_entries.get(id(record))
+            if entry:
+                entry.delete(0, "end")
+                entry.insert(0, template)
+                entry.configure(border_color=colors.background_tertiary)
+
+        self._update_status()
+
+    def _refresh_template_menu(self, templates: Optional[List[str]] = None):
+        """重新載入範本選單內容"""
+        if not self.template_menu:
+            return
+
+        if templates is None:
+            try:
+                templates = list(self.template_manager.get_templates())
+            except Exception as error:  # pragma: no cover
+                logger.error("載入範本清單失敗: %s", error)
+                templates = list(self.settings.OVERTIME_DESCRIPTION_TEMPLATES)
+
+        templates = list(templates)
+        self.template_values = templates
+
+        menu_values = (
+            [self.template_placeholder, *templates]
+            if templates
+            else [self.template_placeholder]
+        )
+        state = "normal" if templates else "disabled"
+
+        self.template_menu.configure(values=menu_values, state=state)
+        self.template_var.set(self.template_placeholder)
+
+    def _open_template_manager(self):
+        """開啟範本管理對話框"""
+        if self.template_dialog and self.template_dialog.winfo_exists():
+            self.template_dialog.focus_set()
+            return
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("管理加班內容範本")
+        dialog.geometry("420x360")
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+        dialog.protocol("WM_DELETE_WINDOW", self._close_template_dialog)
+
+        header_label = ctk.CTkLabel(
+            dialog,
+            text="每行一個範本,留空行會被忽略",
+            **get_font_config("body"),
+            text_color=colors.text_secondary,
+            anchor="w",
+        )
+        header_label.pack(fill="x", padx=spacing.lg, pady=(spacing.lg, spacing.sm))
+
+        editor = ctk.CTkTextbox(
+            dialog,
+            width=380,
+            height=220,
+            **get_font_config("body"),
+        )
+        editor.pack(fill="both", expand=True, padx=spacing.lg, pady=(0, spacing.md))
+        editor.insert("1.0", "\n".join(self.template_values))
+
+        button_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        button_frame.pack(fill="x", padx=spacing.lg, pady=(0, spacing.lg))
+
+        save_button = ctk.CTkButton(
+            button_frame,
+            text="儲存",
+            command=self._save_template_changes,
+            **get_font_config("body"),
+            fg_color=colors.primary,
+            hover_color=colors.primary_hover,
+            height=32,
+            corner_radius=border_radius.sm,
+        )
+        save_button.pack(side="right", padx=(spacing.sm, 0))
+
+        cancel_button = ctk.CTkButton(
+            button_frame,
+            text="取消",
+            command=self._close_template_dialog,
+            **get_font_config("body"),
+            fg_color=colors.background_tertiary,
+            hover_color=colors.border_medium,
+            text_color=colors.text_secondary,
+            height=32,
+            corner_radius=border_radius.sm,
+        )
+        cancel_button.pack(side="right", padx=(0, spacing.sm))
+
+        self.template_dialog = dialog
+        self.template_editor = editor
+
+    def _close_template_dialog(self):
+        """關閉範本管理對話框"""
+        if self.template_dialog and self.template_dialog.winfo_exists():
+            self.template_dialog.grab_release()
+            self.template_dialog.destroy()
+
+        self.template_dialog = None
+        self.template_editor = None
+
+    def _save_template_changes(self):
+        """儲存範本管理對話框中的內容"""
+        if not self.template_editor:
+            return
+
+        raw_text = self.template_editor.get("1.0", "end")
+        templates = [line.strip() for line in raw_text.splitlines() if line.strip()]
+
+        try:
+            saved_templates = self.template_manager.save_templates(templates)
+        except OSError as error:
+            logger.error("儲存範本失敗: %s", error)
+            messagebox.showerror("錯誤", f"無法儲存範本: {error}")
+            return
+
+        self._refresh_template_menu(saved_templates)
+        messagebox.showinfo("成功", "已更新範本清單")
+        self._close_template_dialog()
 
     def on_submit(self):
         """送出申請"""
