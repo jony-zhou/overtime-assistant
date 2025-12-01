@@ -48,8 +48,10 @@ icon_path = str(icon_file) if icon_file.exists() else None
 exe = EXE(
     pyz,
     analysis.scripts,
+    analysis.binaries,
+    analysis.zipfiles,
+    analysis.datas,
     [],
-    exclude_binaries=True,
     name=f"overtime-assistant-{VERSION}",
     debug=False,
     bootloader_ignore_signals=False,
@@ -64,13 +66,3 @@ exe = EXE(
     icon=icon_path,
 )
 
-coll = COLLECT(
-    exe,
-    analysis.binaries,
-    analysis.zipfiles,
-    analysis.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name=f"overtime-assistant-{VERSION}",
-)
