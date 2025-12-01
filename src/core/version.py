@@ -8,8 +8,8 @@ from typing import Tuple
 
 
 # 當前版本號
-VERSION = "1.2.0"
-VERSION_NAME = "修正icon解析度調整至128x128"
+VERSION = "1.2.1"
+VERSION_NAME = "現代化更新介面 + UX 優化"
 
 
 @dataclass(frozen=True)
