@@ -61,7 +61,7 @@ class MainWindow(ctk.CTk):
         self.card_avg_hours: Optional[StatisticsCard] = None
         self.card_max_hours: Optional[StatisticsCard] = None
         self.card_unreported: Optional[StatisticsCard] = None
-        
+
         self.auth_service = None
         self.data_service = None
         self.personal_record_service = None
@@ -252,7 +252,7 @@ class MainWindow(ctk.CTk):
         title.pack(side="left")
 
     def _create_navbar_right(self, parent):
-        """建立導覽列右側 (使用者資訊 + 登出)"""
+        """建立導覽列右側 (使用者資訊 + 檢查更新 + 登出)"""
         right_section = ctk.CTkFrame(parent, fg_color="transparent")
         right_section.pack(side="right")
 
@@ -264,6 +264,19 @@ class MainWindow(ctk.CTk):
             text_color=colors.text_secondary,
         )
         self.user_label.pack(side="left", padx=(0, spacing.md))
+
+        # 檢查更新按鈕
+        self.check_update_button = ctk.CTkButton(
+            right_section,
+            text="🔄 檢查更新",
+            width=100,
+            height=36,
+            font=get_font_config(typography.size_body),
+            fg_color=colors.info,
+            hover_color=colors.info + "CC",
+            command=self.on_check_update,
+        )
+        self.check_update_button.pack(side="left", padx=(0, spacing.sm))
 
         # 登出按鈕
         self.logout_button = ctk.CTkButton(
@@ -781,6 +794,35 @@ class MainWindow(ctk.CTk):
 
         # 重置 UI
         self._switch_to_login_page()
+
+    def on_check_update(self):
+        """手動檢查更新"""
+        logger.info("使用者手動觸發更新檢查")
+
+        # 禁用按鈕,避免重複點擊
+        self.check_update_button.configure(state="disabled", text="🔄 檢查中...")
+
+        # 背景執行檢查
+        self._execute_in_background(
+            self._check_update_task, callback=self._on_manual_update_check_complete
+        )
+
+    def _on_manual_update_check_complete(self, update_info: Optional[dict]):
+        """手動檢查更新完成回調"""
+        # 恢復按鈕狀態
+        self.check_update_button.configure(state="normal", text="🔄 檢查更新")
+
+        if update_info:
+            if update_info.get("has_update"):
+                logger.info(f"發現新版本 {update_info.get('latest_version')}")
+                show_update_dialog(self, update_info)
+            else:
+                mb.showinfo(
+                    "已是最新版本",
+                    f"目前版本 v{update_info.get('current_version')} 已是最新版本!",
+                )
+        else:
+            mb.showerror("檢查失敗", "無法檢查更新,請確認網路連線正常")
 
     def _clear_sensitive_data(self):
         """
