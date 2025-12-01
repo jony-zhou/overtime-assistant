@@ -99,6 +99,11 @@ class UpdateService:
             # 取得下載連結 (Windows EXE)
             download_url = self._get_windows_exe_url(release_data)
 
+            # 除錯日誌
+            logger.info(f"解析的下載連結: '{download_url}'")
+            logger.info(f"Release 頁面連結: '{release_data.get('html_url', '')}'")
+            logger.info(f"Assets 數量: {len(release_data.get('assets', []))}")
+
             update_info = {
                 "has_update": has_update,
                 "latest_version": latest_version,
