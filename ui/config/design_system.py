@@ -43,6 +43,7 @@ class Colors:
     error: str = "#e74c3c"  # 錯誤
     error_hover: str = "#c0392b"
     info: str = "#2196F3"  # 資訊
+    info_hover: str = "#1976D2"  # 資訊 hover 狀態
 
     # === 文字色系 ===
     text_primary: str = "#FFFFFF"  # 主要文字
