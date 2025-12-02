@@ -1,4 +1,20 @@
-"""個人加班記錄查詢服務"""
+"""[已棄用] 個人加班記錄查詢服務
+
+警告: 此服務已被 DataSyncService 取代
+
+替代方案:
+    from src.services.data_sync_service import DataSyncService
+
+    # 舊用法 (deprecated)
+    personal_service = PersonalRecordService(base_url)
+    records, summary = personal_service.fetch_records(session)
+
+    # 新用法
+    data_sync = DataSyncService(auth_service, settings)
+    records, summary = data_sync.get_personal_records()
+
+移除時間: v2.0.0
+"""
 
 import logging
 from typing import List, Tuple
@@ -11,7 +27,10 @@ logger = logging.getLogger(__name__)
 
 class PersonalRecordService:
     """
-    個人加班記錄查詢服務
+    [已棄用] 個人加班記錄查詢服務
+
+    警告: 此服務已被 DataSyncService 取代,將於 v2.0.0 移除
+    請使用 DataSyncService.get_personal_records() 取得個人記錄
 
     職責:
     - 查詢個人已申請的加班記錄 (FW21003Z.aspx)
@@ -23,9 +42,18 @@ class PersonalRecordService:
         """
         初始化個人記錄服務
 
+        警告: 此類別已棄用,請使用 DataSyncService
+
         Args:
             base_url: SSP 系統基礎 URL
         """
+        import warnings
+
+        warnings.warn(
+            "PersonalRecordService 已棄用,請使用 DataSyncService",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.base_url = base_url
         self.personal_record_url = f"{base_url}/FW21003Z.aspx"
 
