@@ -231,7 +231,7 @@ class OvertimeReportTab(ctk.CTkFrame):
             self.loading_container,
             text="⏳ 正在載入加班記錄...\n\n正在查詢已申請狀態,請稍候",
             **get_font_config("body"),
-            text_color=colors.text_secondary,
+            text_color=colors.info,
             justify="center",
         )
 

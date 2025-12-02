@@ -179,7 +179,7 @@ class PersonalRecordTab(ctk.CTkFrame):
             table_container,
             text="📝 尚無個人加班記錄\n\n請先登入並載入資料",
             font=(typography.font_family_primary, typography.size_body),
-            text_color=colors.text_secondary,
+            text_color=colors.info,
             justify="center",
         )
 
@@ -214,6 +214,17 @@ class PersonalRecordTab(ctk.CTkFrame):
 
         # 插入資料
         for record in records:
+            # 確保數值欄位不為 None
+            overtime_hours = (
+                record.overtime_hours if record.overtime_hours is not None else 0.0
+            )
+            monthly_total = (
+                record.monthly_total if record.monthly_total is not None else 0.0
+            )
+            quarterly_total = (
+                record.quarterly_total if record.quarterly_total is not None else 0.0
+            )
+
             self.tree.insert(
                 "",
                 "end",
@@ -221,9 +232,9 @@ class PersonalRecordTab(ctk.CTkFrame):
                     record.date,
                     record.content,
                     record.status,
-                    f"{record.overtime_hours:.2f} hr",
-                    f"{record.monthly_total:.2f} hr",
-                    f"{record.quarterly_total:.2f} hr",
+                    f"{overtime_hours:.2f} hr",
+                    f"{monthly_total:.2f} hr",
+                    f"{quarterly_total:.2f} hr",
                     record.report_type,
                 ),
             )
