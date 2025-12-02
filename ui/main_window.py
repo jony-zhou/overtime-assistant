@@ -14,8 +14,13 @@ from PIL import Image, ImageTk
 import customtkinter as ctk
 from src.models import OvertimeReport
 from src.models.personal_record import PersonalRecord, PersonalRecordSummary
-from src.services import AuthService, DataService, ExportService, UpdateService
-from src.services.personal_record_service import PersonalRecordService
+from src.services import (
+    AuthService,
+    DataService,
+    ExportService,
+    UpdateService,
+    DataSyncService,
+)
 from src.services.credential_manager import CredentialManager
 from src.core import OvertimeCalculator, VERSION
 from src.config import Settings
@@ -25,6 +30,7 @@ from ui.components import (
     OvertimeReportTab,
     AttendanceTab,
     PersonalRecordTab,
+    PunchRecordTab,
 )
 from ui.components.statistics_card import StatisticsCard
 from ui.config import (
@@ -64,10 +70,12 @@ class MainWindow(ctk.CTk):
 
         self.auth_service = None
         self.data_service = None
-        self.personal_record_service = None
+        self.data_sync_service = None  # 統一資料同步服務
         self.current_report = None
         self.personal_records = []
         self.personal_summary = None
+        self.punch_records = []  # 打卡記錄
+        self.submitted_records = {}  # 快取已申請記錄
         self._login_password = None  # 清除密碼
 
         # 初始化屬性
@@ -125,7 +133,6 @@ class MainWindow(ctk.CTk):
         self.current_report: Optional[OvertimeReport] = None
         self.personal_records: list[PersonalRecord] = []
         self.personal_summary: Optional[PersonalRecordSummary] = None
-        self.personal_record_service: Optional[PersonalRecordService] = None
         self._login_username: Optional[str] = None
         self._login_password: Optional[str] = None
         self._remember_me: bool = False
@@ -273,7 +280,7 @@ class MainWindow(ctk.CTk):
             height=36,
             font=get_font_config(typography.size_body),
             fg_color=colors.info,
-            hover_color=colors.info + "CC",
+            hover_color=colors.info_hover,
             command=self.on_check_update,
         )
         self.check_update_button.pack(side="left", padx=(0, spacing.sm))
@@ -308,12 +315,7 @@ class MainWindow(ctk.CTk):
             fill="both", expand=True, padx=spacing.lg, pady=(0, spacing.md)
         )
 
-        # 建立分頁 1: 加班補報
-        self.tabview.add("⚙️ 加班補報")
-        self.overtime_tab = OvertimeReportTab(self.tabview.tab("⚙️ 加班補報"))
-        self.overtime_tab.pack(fill="both", expand=True, padx=0, pady=0)
-
-        # 建立分頁 2: 異常清單
+        # 建立分頁 1: 異常清單 (優先載入 - 預設顯示)
         self.tabview.add("📅 異常清單")
         self.attendance_tab = AttendanceTab(
             self.tabview.tab("📅 異常清單"),
@@ -322,14 +324,24 @@ class MainWindow(ctk.CTk):
         )
         self.attendance_tab.pack(fill="both", expand=True, padx=0, pady=0)
 
-        # 建立分頁 3: 個人記錄
+        # 建立分頁 2: 加班補報 (主要功能)
+        self.tabview.add("⚙️ 加班補報")
+        self.overtime_tab = OvertimeReportTab(self.tabview.tab("⚙️ 加班補報"))
+        self.overtime_tab.pack(fill="both", expand=True, padx=0, pady=0)
+
+        # 建立分頁 3: 打卡記錄 (輔助參考)
+        self.tabview.add("🕐 打卡記錄")
+        self.punch_record_tab = PunchRecordTab(self.tabview.tab("🕐 打卡記錄"))
+        self.punch_record_tab.pack(fill="both", expand=True, padx=0, pady=0)
+
+        # 建立分頁 4: 個人記錄 (歷史記錄)
         self.tabview.add("📊 個人記錄")
         self.personal_record_tab = PersonalRecordTab(self.tabview.tab("📊 個人記錄"))
         self.personal_record_tab.pack(fill="both", expand=True, padx=0, pady=0)
         # 覆寫重新整理方法
         self.personal_record_tab.on_refresh = self.on_refresh_personal_records
 
-        # 預設顯示異常清單分頁
+        # 預設顯示異常清單分頁 (優先載入,避免顯示"請登入"過久)
         self.tabview.set("📅 異常清單")
 
     def _create_statistics_section(self):
@@ -347,22 +359,22 @@ class MainWindow(ctk.CTk):
         """建立統計卡片"""
         from ui.components.statistics_card import StatisticsCard
 
-        # 卡片配置 (5張: 前4張來自個人記錄,第5張來自異常清單)
+        # 卡片配置 (重點: 待申請資訊)
         cards_config = [
             {
                 "attr": "card_total_records",
-                "title": "總筆數",
+                "title": "待申請",
                 "value": "0",
-                "icon": "📅",
-                "color": colors.primary,
+                "icon": "⚠️",
+                "color": colors.error,  # 紅色警示
                 "column": 0,
             },
             {
                 "attr": "card_total_hours",
-                "title": "總加班時數",
-                "value": "0.0 小時",
-                "icon": "⏱️",
-                "color": colors.secondary,
+                "title": "已申請",
+                "value": "0",
+                "icon": "✔️",
+                "color": colors.success,  # 綠色
                 "column": 1,
             },
             {
@@ -370,7 +382,7 @@ class MainWindow(ctk.CTk):
                 "title": "平均加班時數",
                 "value": "0.0 小時",
                 "icon": "📊",
-                "color": colors.info,
+                "color": colors.info,  # 藍色資訊
                 "column": 2,
             },
             {
@@ -378,15 +390,15 @@ class MainWindow(ctk.CTk):
                 "title": "最高加班時數",
                 "value": "0.0 小時",
                 "icon": "🔥",
-                "color": colors.warning,
+                "color": colors.warning,  # 橘色
                 "column": 3,
             },
             {
                 "attr": "card_unreported",
-                "title": "未報加班數",
-                "value": "0",
-                "icon": "⚠️",
-                "color": colors.error,
+                "title": "總加班時數",
+                "value": "0.0 小時",
+                "icon": "⏱️",
+                "color": colors.success,  # 綠色
                 "column": 4,
             },
         ]
@@ -516,11 +528,12 @@ class MainWindow(ctk.CTk):
 
     def _start_data_fetch(self):
         """開始資料抓取"""
-        # 建立資料服務
-        self.data_service = DataService(self.auth_service.get_session(), self.settings)
+        # 建立統一資料同步服務 (取代 DataService + PersonalRecordService)
+        session = self.auth_service.get_session()
+        self.data_sync_service = DataSyncService(session, self.settings)
 
-        # 建立個人記錄服務
-        self.personal_record_service = PersonalRecordService(self.settings.SSP_BASE_URL)
+        # 保留舊 DataService 作為備用 (用於某些特殊情況)
+        self.data_service = DataService(session, self.settings)
 
         # 抓取資料
         self.fetch_data()
@@ -545,39 +558,69 @@ class MainWindow(ctk.CTk):
         Optional[str],
         list[PersonalRecord],
         Optional[PersonalRecordSummary],
+        dict,
     ]:
         """
         資料抓取任務 (背景執行)
 
+        使用 DataSyncService 進行統一資料同步,減少重複請求
+
+        最佳實踐:
+        - 一次性抓取所有資料 (異常、個人記錄、已申請狀態)
+        - 避免分頁切換時重複查詢
+        - 使用快取機制提升效能
+
         Returns:
-            tuple: (報表資料, 錯誤訊息, 個人記錄, 個人記錄摘要)
+            tuple: (報表資料, 錯誤訊息, 個人記錄, 個人記錄摘要, 已申請記錄)
         """
+        from src.services.overtime_status_service import OvertimeStatusService
+
         try:
-            # 抓取出勤異常資料
-            raw_records = self.data_service.get_attendance_data()
+            submitted_records = {}
+
+            # 使用 DataSyncService 統一抓取所有資料 (一次抓取,減少重複請求)
+            if self.data_sync_service:
+                # 同步所有資料 (打卡/假別/額度/異常/個人記錄)
+                _snapshot = self.data_sync_service.sync_all()
+
+                # 使用 adapter 轉換為舊格式 (向後相容)
+                raw_records = self.data_sync_service.get_attendance_records()
+                personal_records, personal_summary = (
+                    self.data_sync_service.get_personal_records()
+                )
+
+                # 一併抓取已申請狀態 (避免後續重複查詢)
+                if self.auth_service:
+                    session = self.auth_service.get_session()
+                    status_service = OvertimeStatusService(self.settings)
+                    submitted_records = status_service.fetch_submitted_records(session)
+
+                logger.info(
+                    "DataSyncService 同步完成: %d 筆異常, %d 筆個人記錄, %d 筆已申請",
+                    len(raw_records),
+                    len(personal_records),
+                    len(submitted_records),
+                )
+            else:
+                # Fallback: 使用舊服務 (未初始化 DataSyncService 時)
+                raw_records = self.data_service.get_attendance_data()
+                personal_records, personal_summary = [], None
 
             if not raw_records:
-                return (None, "沒有找到出勤記錄", [], None)
+                return (
+                    None,
+                    "沒有找到出勤記錄",
+                    personal_records,
+                    personal_summary,
+                    submitted_records,
+                )
 
             report = self.calculator.calculate_overtime(raw_records)
-
-            # 同時抓取個人記錄
-            personal_records, personal_summary = [], None
-            try:
-                if self.personal_record_service and self.auth_service:
-                    session = self.auth_service.get_session()
-                    personal_records, personal_summary = (
-                        self.personal_record_service.fetch_personal_records(session)
-                    )
-                    logger.info(f"成功載入個人記錄: {len(personal_records)} 筆")
-            except Exception as e:
-                logger.warning(f"個人記錄載入失敗 (不影響主功能): {e}")
-
-            return (report, None, personal_records, personal_summary)
+            return (report, None, personal_records, personal_summary, submitted_records)
 
         except Exception as e:
             logger.error(f"抓取資料錯誤: {e}", exc_info=True)
-            return (None, str(e), [], None)
+            return (None, str(e), [], None, {})
 
     def _on_fetch_complete(
         self,
@@ -586,18 +629,27 @@ class MainWindow(ctk.CTk):
             Optional[str],
             list[PersonalRecord],
             Optional[PersonalRecordSummary],
+            dict,
         ],
     ):
         """資料抓取完成回調"""
-        report, error, personal_records, personal_summary = result
+        report, error, personal_records, personal_summary, submitted_records = result
 
-        # 儲存個人記錄
+        # 儲存個人記錄和已申請記錄
         self.personal_records = personal_records
         self.personal_summary = personal_summary
+        self.submitted_records = submitted_records  # 快取已申請記錄
 
         # 顯示個人記錄
         if personal_records and personal_summary:
             self.personal_record_tab.display_records(personal_records, personal_summary)
+
+        # 顯示打卡記錄 (新增)
+        if self.data_sync_service:
+            punch_records = self.data_sync_service.get_punch_records()
+            self.punch_records = punch_records
+            self.punch_record_tab.display_records(punch_records)
+            logger.info("打卡記錄顯示完成: %d 筆", len(punch_records))
 
         if report and report.records:
             self._handle_successful_fetch(report)
@@ -625,7 +677,15 @@ class MainWindow(ctk.CTk):
         self._update_timestamp()
 
     def _update_statistics_cards(self, report: OvertimeReport):
-        """更新統計卡片數據 (使用個人記錄 + 異常清單)"""
+        """更新統計卡片數據
+
+        計算邏輯:
+        - 第1張: 待申請筆數 (紅色警示)
+        - 第2張: 已申請 (已申請的記錄)
+        - 第3張: 平均加班時數
+        - 第4張: 最高加班時數
+        - 第5張: 總加班時數
+        """
         if not all(
             [
                 self.card_total_records,
@@ -637,36 +697,56 @@ class MainWindow(ctk.CTk):
         ):
             return
 
-        # 如果有個人記錄摘要,使用個人記錄資料
-        if self.personal_summary:
-            # 總筆數
-            self.card_total_records.update_value(
-                str(self.personal_summary.total_records)
-            )
+        # 計算待申請與已申請
+        total_anomaly = len(report.records) if report and report.records else 0
+        submitted_count = len(self.submitted_records) if self.submitted_records else 0
+        pending_count = max(0, total_anomaly - submitted_count)
 
-            # 總加班時數
-            self.card_total_hours.update_value(
-                f"{self.personal_summary.total_overtime_hours:.1f} 小時"
-            )
+        # 計算申請中筆數 (已申請但未核准的)
+        in_progress_count = 0
+        if self.personal_records:
+            for personal_record in self.personal_records:
+                # 申請中的狀態: 未撤銷、未核准、未退件
+                if personal_record.status not in ["已撤銷", "已核准", "已退件"]:
+                    in_progress_count += 1
 
-            # 平均加班時數
-            self.card_avg_hours.update_value(
-                f"{self.personal_summary.average_overtime_hours:.1f} 小時"
-            )
+        # 計算加班時數統計
+        total_hours = 0.0
+        hours_list = []
 
-            # 最高加班時數
-            self.card_max_hours.update_value(
-                f"{self.personal_summary.max_overtime_hours:.1f} 小時"
-            )
-        else:
-            # 沒有個人記錄時,使用 0
-            self.card_total_records.update_value("0")
-            self.card_total_hours.update_value("0.0 小時")
-            self.card_avg_hours.update_value("0.0 小時")
-            self.card_max_hours.update_value("0.0 小時")
+        if self.personal_records:
+            for personal_record in self.personal_records:
+                if personal_record.overtime_hours:
+                    total_hours += personal_record.overtime_hours
+                    hours_list.append(personal_record.overtime_hours)
 
-        # 未報加班數 (來自異常清單)
-        self.card_unreported.update_value(str(report.total_days))
+        # 平均與最高時數
+        avg_hours = total_hours / len(hours_list) if hours_list else 0.0
+        max_hours = max(hours_list) if hours_list else 0.0
+
+        logger.debug(
+            "統計卡片: 待申請=%d, 已申請=%d, 總時數=%.2f, 平均=%.2f, 最高=%.2f",
+            pending_count,
+            in_progress_count,
+            total_hours,
+            avg_hours,
+            max_hours,
+        )
+
+        # 第1張: 待申請筆數 (紅色警示)
+        self.card_total_records.update_value(str(pending_count))
+
+        # 第2張: 已申請
+        self.card_total_hours.update_value(str(in_progress_count))
+
+        # 第3張: 平均加班時數
+        self.card_avg_hours.update_value(f"{avg_hours:.2f} 小時")
+
+        # 第4張: 最高加班時數
+        self.card_max_hours.update_value(f"{max_hours:.2f} 小時")
+
+        # 第5張: 總加班時數
+        self.card_unreported.update_value(f"{total_hours:.2f} 小時")
 
     def _show_report(self, report: OvertimeReport):
         """
@@ -720,17 +800,28 @@ class MainWindow(ctk.CTk):
             mb.showerror("匯出失敗", error_msg)
 
     def on_refresh(self):
-        """重新整理資料 (分頁模式)"""
-        if not self.data_service:
+        """重新整理資料 (分頁模式)
+
+        使用 DataSyncService 的快取機制:
+        - 如果快取有效 (5 分鐘內),直接返回
+        - 否則重新抓取
+        """
+        if not self.data_sync_service and not self.data_service:
             mb.showerror("錯誤", "請先登入")
             return
 
-        # 分頁模式不需要隱藏元件,直接重新抓取
+        # 使用快取優先 (不強制重新整理)
         self.fetch_data()
 
     def on_refresh_personal_records(self):
-        """重新整理個人記錄 (僅載入個人記錄資料)"""
-        if not self.personal_record_service or not self.auth_service:
+        """重新整理個人記錄 (使用增量同步)
+
+        使用 DataSyncService.sync_overtime_status() 增量同步:
+        - 僅更新已申請記錄的狀態
+        - 不重新抓取出勤資料
+        - 比完整同步更快 (1 次 HTTP vs 2 次)
+        """
+        if not self.data_sync_service:
             mb.showerror("錯誤", "請先登入")
             return
 
@@ -745,14 +836,23 @@ class MainWindow(ctk.CTk):
         """
         個人記錄抓取任務 (背景執行)
 
+        使用 DataSyncService.sync_overtime_status() 增量同步
+
         Returns:
             tuple: (個人記錄列表, 摘要, 錯誤訊息)
         """
         try:
-            session = self.auth_service.get_session()
-            personal_records, personal_summary = (
-                self.personal_record_service.fetch_personal_records(session)
-            )
+            # 使用 DataSyncService 增量同步
+            if self.data_sync_service:
+                self.data_sync_service.sync_overtime_status()
+                personal_records, personal_summary = (
+                    self.data_sync_service.get_personal_records()
+                )
+            else:
+                # Fallback: 使用舊服務 (不應該發生)
+                logger.warning("未初始化 DataSyncService, 使用完整同步")
+                return ([], None, "DataSyncService 未初始化")
+
             return (personal_records, personal_summary, None)
         except Exception as e:
             logger.error(f"個人記錄載入錯誤: {e}", exc_info=True)
