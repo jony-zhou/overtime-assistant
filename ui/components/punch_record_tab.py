@@ -9,7 +9,6 @@
 import customtkinter as ctk
 from typing import List
 from tkinter import ttk
-import tkinter as tk
 
 from src.models.punch import PunchRecord
 from ui.config.design_system import colors, typography, spacing, border_radius

@@ -13,7 +13,6 @@ from ui.config import (
     colors,
     typography,
     spacing,
-    border_radius,
     default_styles,
     get_font_config,
 )

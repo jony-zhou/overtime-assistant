@@ -1,9 +1,7 @@
 """測試加班計算核心邏輯"""
 
 import pytest
-from datetime import datetime
 from src.core import OvertimeCalculator
-from src.config import Settings
 
 
 class TestOvertimeCalculator:

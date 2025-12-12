@@ -723,7 +723,7 @@ class OvertimeReportTab(ctk.CTkFrame):
         if empty_records:
             messagebox.showerror(
                 "驗證失敗",
-                f"以下記錄的加班內容為空,請填寫後再送出:\n\n"
+                "以下記錄的加班內容為空,請填寫後再送出:\n\n"
                 + "\n".join([f"- {r.date}" for r in empty_records[:5]]),
             )
             return

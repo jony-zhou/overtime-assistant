@@ -83,7 +83,7 @@ class LoginFrame(ctk.CTkFrame):
                     text_color=colors.primary,
                 )
                 icon_label.pack()
-        except Exception as e:
+        except Exception:
             # 降級方案: 使用 emoji
             icon_label = ctk.CTkLabel(
                 logo_frame,

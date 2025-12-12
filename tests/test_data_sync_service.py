@@ -1,7 +1,7 @@
 """測試 DataSyncService"""
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 from datetime import datetime, timedelta
 from pathlib import Path
 

@@ -62,5 +62,5 @@ class Settings:
                 WORK_HOURS=getattr(config_module, "WORK_HOURS", cls.WORK_HOURS),
                 REST_TIME=getattr(config_module, "REST_TIME", cls.REST_TIME),
             )
-        except:
+        except Exception:
             return cls()

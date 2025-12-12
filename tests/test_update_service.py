@@ -2,10 +2,7 @@
 更新服務測試
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from pathlib import Path
-import json
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
 
 from src.services.update_service import UpdateService

@@ -4,7 +4,6 @@ import customtkinter as ctk
 from tkinter import ttk, messagebox
 import logging
 from typing import List, Optional
-from requests import Session
 
 from src.models.personal_record import PersonalRecord, PersonalRecordSummary
 from ui.config import colors, typography, spacing

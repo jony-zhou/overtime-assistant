@@ -17,7 +17,7 @@
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 from requests import Session
 from requests.exceptions import RequestException, Timeout
@@ -29,11 +29,7 @@ from ..parsers.personal_record_parser import PersonalRecordParser
 from ..models.snapshot import AttendanceSnapshot, OvertimeStatistics
 from ..models.attendance import UnifiedOvertimeRecord
 from ..models.punch import PunchRecord
-from ..models.leave import LeaveRecord
-from ..models.quota import AttendanceQuota
 from ..models.personal_record import PersonalRecord, PersonalRecordSummary
-from ..models.attendance import AttendanceRecord
-from ..models.overtime_submission import OvertimeSubmissionRecord
 
 logger = logging.getLogger(__name__)
 
