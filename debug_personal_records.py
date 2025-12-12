@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 測試 HTML (模擬實際資料)
-test_html = """
+TEST_HTML = """
 <table id="ContentPlaceHolder1_gvFlow211">
     <tr class="RowStyle">
         <td>
@@ -81,7 +81,7 @@ def main():
 
     # 1. 解析 HTML
     parser = PersonalRecordParser()
-    records = parser.parse_records(test_html)
+    records = parser.parse_records(TEST_HTML)
 
     logger.info("\n解析結果:")
     logger.info(f"總共解析到 {len(records)} 筆記錄\n")
