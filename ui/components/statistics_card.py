@@ -13,7 +13,6 @@ from ui.config import (
     colors,
     typography,
     spacing,
-    border_radius,
     default_styles,
     get_font_config,
 )
@@ -100,14 +99,17 @@ class StatisticsCard(ctk.CTkFrame):
         )
         value_label.pack(fill="x", pady=(spacing.sm, 0))
 
-    def update_value(self, new_value: str):
+    def update_value(self, new_value: str, color: str = None):
         """
         更新卡片數值
 
         Args:
             new_value: 新數值
+            color: 可選的新顏色 (用於動態警示)
         """
         self.value = new_value
+        if color is not None:
+            self.color = color
         # 重新建立 UI
         for widget in self.winfo_children():
             widget.destroy()

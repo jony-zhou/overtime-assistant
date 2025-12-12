@@ -113,7 +113,7 @@ class AttendanceTab(ctk.CTkFrame):
             text="📊 正在載入統計資訊...",
             font=(typography.font_family_primary, typography.size_body),
             justify="left",
-            text_color=colors.text_secondary,
+            text_color=colors.info,
         )
         self.stats_label.pack(padx=spacing.lg, pady=spacing.md)
 
@@ -201,33 +201,36 @@ class AttendanceTab(ctk.CTkFrame):
             self.tree.delete(item)
 
         # 填入資料
-        for record in report.records:
-            self.tree.insert(
-                "",
-                "end",
-                values=(
-                    record.date,
-                    record.start_time,
-                    record.end_time,
-                    record.total_minutes,
-                    record.overtime_hours,
-                ),
+        if report and report.records:
+            for record in report.records:
+                self.tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        record.date,
+                        record.start_time,
+                        record.end_time,
+                        record.total_minutes,
+                        record.overtime_hours,
+                    ),
+                )
+
+            # 更新統計資訊
+            summary = report.get_summary()
+            stats_text = (
+                f"記錄天數: {summary['記錄天數']} 天  |  "
+                f"加班天數: {summary['加班天數']} 天  |  "
+                f"總加班時數: {summary['總加班時數']} 小時  |  "
+                f"平均每日加班: {summary['平均每日加班']} 小時  |  "
+                f"最長加班: {summary['最長加班']} 小時"
             )
 
-        # 更新統計資訊
-        summary = report.get_summary()
-        stats_text = (
-            f"記錄天數: {summary['記錄天數']} 天  |  "
-            f"加班天數: {summary['加班天數']} 天  |  "
-            f"總加班時數: {summary['總加班時數']} 小時  |  "
-            f"平均每日加班: {summary['平均每日加班']} 小時  |  "
-            f"最長加班: {summary['最長加班']} 小時"
-        )
+            if summary["最長加班日期"]:
+                stats_text += f"  ({summary['最長加班日期']})"
 
-        if summary["最長加班日期"]:
-            stats_text += f"  ({summary['最長加班日期']})"
-
-        self.stats_label.configure(text=stats_text)
+            self.stats_label.configure(text=stats_text)
+        else:
+            self.stats_label.configure(text="📊 無異常記錄")
 
     def copy_total_hours(self):
         """複製總加班時數到剪貼簿"""

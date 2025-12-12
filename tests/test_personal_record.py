@@ -1,7 +1,6 @@
 """個人記錄相關功能測試"""
 
 import pytest
-from datetime import datetime
 from src.models.personal_record import PersonalRecord, PersonalRecordSummary
 
 

@@ -1,4 +1,21 @@
-"""加班申請狀態查詢服務"""
+"""[已棄用] 加班申請狀態查詢服務
+
+警告: 此服務已被 DataSyncService 取代
+
+替代方案:
+    from src.services.data_sync_service import DataSyncService
+
+    # 舊用法 (deprecated)
+    status_service = OvertimeStatusService()
+    records = status_service.fetch_submitted_records(session)
+
+    # 新用法
+    data_sync = DataSyncService(auth_service, settings)
+    snapshot = data_sync.sync_all()
+    records = {r.date: SubmittedRecord(...) for r in snapshot.personal_records}
+
+移除時間: v2.0.0
+"""
 
 import requests
 from bs4 import BeautifulSoup
@@ -13,9 +30,21 @@ logger = logging.getLogger(__name__)
 
 
 class OvertimeStatusService:
-    """加班申請狀態查詢服務 - 查詢已申請的加班記錄"""
+    """
+    [已棄用] 加班申請狀態查詢服務 - 查詢已申請的加班記錄
+
+    警告: 此服務已被 DataSyncService 取代,將於 v2.0.0 移除
+    請使用 DataSyncService.sync_all() 取得已申請記錄
+    """
 
     def __init__(self, settings: Optional[Settings] = None):
+        import warnings
+
+        warnings.warn(
+            "OvertimeStatusService 已棄用,請使用 DataSyncService",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.settings = settings or Settings()
 
         if not self.settings.VERIFY_SSL:

@@ -10,7 +10,7 @@ from pathlib import Path
 import json
 import logging
 
-from ..core.version import get_current_version, is_newer_version, VERSION
+from ..core.version import is_newer_version, VERSION
 
 logger = logging.getLogger(__name__)
 

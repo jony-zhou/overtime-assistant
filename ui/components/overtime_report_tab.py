@@ -231,7 +231,7 @@ class OvertimeReportTab(ctk.CTkFrame):
             self.loading_container,
             text="⏳ 正在載入加班記錄...\n\n正在查詢已申請狀態,請稍候",
             **get_font_config("body"),
-            text_color=colors.text_secondary,
+            text_color=colors.info,
             justify="center",
         )
 
@@ -723,7 +723,7 @@ class OvertimeReportTab(ctk.CTkFrame):
         if empty_records:
             messagebox.showerror(
                 "驗證失敗",
-                f"以下記錄的加班內容為空,請填寫後再送出:\n\n"
+                "以下記錄的加班內容為空,請填寫後再送出:\n\n"
                 + "\n".join([f"- {r.date}" for r in empty_records[:5]]),
             )
             return

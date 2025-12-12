@@ -5,7 +5,7 @@
 
 import customtkinter as ctk
 import webbrowser
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 from PIL import Image
 import logging

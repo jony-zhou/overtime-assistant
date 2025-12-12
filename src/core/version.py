@@ -8,8 +8,8 @@ from typing import Tuple
 
 
 # 當前版本號
-VERSION = "1.2.1"
-VERSION_NAME = "現代化更新介面 + UX 優化"
+VERSION = "1.3.0"
+VERSION_NAME = "統一資料同步機制 + 智慧快取"
 
 
 @dataclass(frozen=True)

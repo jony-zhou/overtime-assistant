@@ -7,6 +7,7 @@ from .update_dialog import show_update_dialog
 from .overtime_report_tab import OvertimeReportTab
 from .attendance_tab import AttendanceTab
 from .personal_record_tab import PersonalRecordTab
+from .punch_record_tab import PunchRecordTab
 
 __all__ = [
     "LoginFrame",
@@ -16,4 +17,5 @@ __all__ = [
     "OvertimeReportTab",
     "AttendanceTab",
     "PersonalRecordTab",
+    "PunchRecordTab",
 ]

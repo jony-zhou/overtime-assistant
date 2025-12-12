@@ -12,6 +12,7 @@ class Settings:
     ATTENDANCE_URL: str = "/FW99001Z.aspx"  # 出勤異常清單
     OVERTIME_REPORT_URL: str = "/FW21001Z.aspx?Kind=B"  # 加班補報申請單
     OVERTIME_STATUS_URL: str = "/FW21003Z.aspx"  # 個人紀錄查詢
+    PERSONAL_RECORD_URL: str = "/FW21003Z.aspx"  # 個人紀錄查詢 (同 OVERTIME_STATUS_URL)
 
     # 時間設定 (分鐘)
     LUNCH_BREAK: int = 70
@@ -43,6 +44,7 @@ class Settings:
     VERIFY_SSL: bool = False
     REQUEST_TIMEOUT: int = 30
     MAX_PAGES: int = 10
+    CACHE_DURATION_SECONDS: int = 300  # 快取有效時間 (5 分鐘)
 
     @classmethod
     def from_file(cls, filepath: str = "config.py"):
@@ -60,5 +62,5 @@ class Settings:
                 WORK_HOURS=getattr(config_module, "WORK_HOURS", cls.WORK_HOURS),
                 REST_TIME=getattr(config_module, "REST_TIME", cls.REST_TIME),
             )
-        except:
+        except Exception:
             return cls()
