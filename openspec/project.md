@@ -26,7 +26,7 @@ TECO SSP 加班時數計算器 - 現代化桌面應用程式,自動登入 TECO S
 - **pywin32-ctypes**: Windows API 呼叫
 
 ### 開發工具
-- **Pytest + pytest-cov**: 單元測試與覆蓋率分析 (44 個測試)
+- **Pytest + pytest-cov**: 單元測試與覆蓋率分析 (96 個測試)
 - **PyInstaller**: 打包為單一執行檔 (.exe)
 - **Logging (colorama)**: 結構化日誌系統
 - **Pillow**: 圖示與圖片處理
@@ -65,20 +65,21 @@ TECO SSP 加班時數計算器 - 現代化桌面應用程式,自動登入 TECO S
 src/
 ├── core/       # 業務邏輯層 (計算、版本管理)
 ├── models/     # 資料模型層 (Dataclass)
-├── services/   # 服務層 (認證、資料擷取、匯出)
+├── parsers/    # 解析層 (HTML → 資料模型)
+├── services/   # 服務層 (認證、資料同步、匯出)
 ├── config/     # 配置層 (設定檔)
 └── utils/      # 工具層 (日誌、輔助函式)
 
 ui/
-├── components/ # UI 元件層 (登入框、報表表格、狀態列)
+├── components/ # UI 元件層 (登入框、分頁、報表、統計卡片、更新對話框)
 ├── config/     # 設計系統 (顏色、字型、間距)
-└── main_window.py  # 主視窗控制器
+└── main_window.py  # 主視窗控制器 (3 分頁介面)
 ```
 
 **設計原則 (SOLID)**:
 - **Single Responsibility**: 每個類別只負責一件事
   - `AuthService`: 處理登入
-  - `DataService`: 處理資料擷取
+  - `DataSyncService`: 統一資料同步與快取 (v1.3.0 取代舊版 DataService)
   - `ExportService`: 處理 Excel 匯出
   - `OvertimeCalculator`: 處理時數計算
   
@@ -91,11 +92,12 @@ ui/
 - **Open/Closed**: 透過繼承擴展,而非修改現有程式碼
 
 **資料流程**:
-1. **使用者操作** → UI 元件 (LoginFrame, ReportFrame)
+1. **使用者操作** → UI 元件 (LoginFrame, AttendanceTab, OvertimeReportTab, PersonalRecordTab)
 2. **UI 元件** → MainWindow 事件處理器 (on_login, on_export)
-3. **MainWindow** → Service 層 (背景執行緒)
-4. **Service 層** → 核心業務邏輯 (OvertimeCalculator)
-5. **結果回傳** → UI 更新 (主執行緒)
+3. **MainWindow** → DataSyncService (背景執行緒,3 並發抓取)
+4. **DataSyncService** → Parsers (HTML → 資料模型) → OvertimeCalculator
+5. **結果快取** → AttendanceSnapshot (5 分鐘 TTL)
+6. **UI 分頁** ← 從 Snapshot 讀取並更新 (主執行緒)
 
 **背景執行機制**:
 - 登入與資料抓取在背景執行緒執行 (`threading.Thread`)
@@ -105,19 +107,33 @@ ui/
 ### Testing Strategy
 
 **單元測試覆蓋**:
-- 總計 44 個測試案例
+- 總計 96 個測試案例
 - 涵蓋核心業務邏輯 (calculator, version)
-- 涵蓋資料模型 (attendance, report)
-- 涵蓋服務層 (update_service)
+- 涵蓋資料模型 (attendance, overtime_submission, personal_record)
+- 涵蓋解析層 (parsers)
+- 涵蓋服務層 (data_sync_service, update_service, template_manager)
+- 涵蓋 UI 元件 (overtime_report_tab)
+- 涵蓋效能基準 (performance)
 
 **測試檔案結構**:
 ```
 tests/
-├── conftest.py              # Pytest 配置與 fixture
-├── test_calculator.py       # 加班計算邏輯測試
-├── test_models.py           # 資料模型測試
-├── test_version.py          # 版本管理測試
-└── test_update_service.py   # 更新服務測試
+├── conftest.py                  # Pytest 配置與 fixture
+├── fixtures/                    # Mock HTML 測試資料
+│   ├── anomaly_page.html
+│   ├── attendance_page.html
+│   └── personal_record_page.html
+├── test_calculator.py           # 加班計算邏輯測試
+├── test_data_sync_service.py    # 統一資料同步服務測試
+├── test_models.py               # 資料模型測試
+├── test_overtime_report_tab.py  # 加班報表 UI 測試
+├── test_overtime_submission.py  # 加班補報邏輯測試
+├── test_parsers.py              # HTML 解析器測試
+├── test_performance.py          # 效能基準測試
+├── test_personal_record.py      # 個人紀錄測試
+├── test_template_manager.py     # 範本管理測試
+├── test_update_service.py       # 更新服務測試
+└── test_version.py              # 版本管理測試
 ```
 
 **執行測試**:
@@ -209,10 +225,10 @@ feat(ui): 新增統計儀表板卡片元件
 - 午休時間: 70 分鐘
 - 正常工時: 480 分鐘 (8 小時)
 - 休息時間: 30 分鐘
-- 標準上班時間: 08:00
+- 標準上班時間: 09:00
 
 **特殊處理**:
-- 若上班時間晚於標準時間 (08:00),以標準時間計算
+- 若上班時間晚於標準時間 (09:00),以標準時間計算
 - 加班時數無條件進位至小數點後兩位
 - 負數時數設為 0 (避免計算錯誤)
 - 單日最大加班時數: 4 小時 (可設定)
