@@ -58,8 +58,11 @@ class MainWindow(ctk.CTk):
     - 處理使用者操作流程
     """
 
-    def __init__(self):
+    def __init__(self, test_mode: bool = False):
         super().__init__()
+
+        # 測試模式標誌
+        self.test_mode = test_mode
 
         # 統計卡片屬性 (初始化為 None,稍後建立)
         self.card_total_records: Optional[StatisticsCard] = None
@@ -87,12 +90,19 @@ class MainWindow(ctk.CTk):
         # 建立 UI
         self._create_ui()
 
-        # 啟動後檢查更新 (非阻塞式)
-        self.after(1000, self._check_for_updates)
+        # 測試模式：直接載入假數據
+        if self.test_mode:
+            self._load_mock_data()
+        else:
+            # 啟動後檢查更新 (非阻塞式)
+            self.after(1000, self._check_for_updates)
 
     def _init_window_settings(self):
         """初始化視窗設定 (Single Responsibility)"""
-        self.title(f"TECO SSP 加班助手 v{self.version}")
+        title = f"TECO SSP 加班助手 v{self.version}"
+        if self.test_mode:
+            title += " [測試模式]" 
+        self.title(title)
         self.geometry("1200x900")
 
         # 設定主題
@@ -143,14 +153,21 @@ class MainWindow(ctk.CTk):
         self.main_container = ctk.CTkFrame(self, fg_color=colors.background_primary)
         self.main_container.pack(fill="both", expand=True)
 
-        # === 登入頁面 (初始顯示) ===
-        self._create_login_page()
+        if self.test_mode:
+            # 測試模式：直接顯示主頁面，不顯示登入頁面
+            self._create_main_page()
+            self.main_content.pack(fill="both", expand=True)
+            # 設定測試用戶資訊
+            self._login_username = "測試用戶"
+        else:
+            # === 登入頁面 (初始顯示) ===
+            self._create_login_page()
 
-        # 載入儲存的憑證 (如果有)
-        self._load_saved_credentials()
+            # 載入儲存的憑證 (如果有)
+            self._load_saved_credentials()
 
-        # === 主頁面 (初始隱藏) ===
-        self._create_main_page()
+            # === 主頁面 (初始隱藏) ===
+            self._create_main_page()
 
     def _create_login_page(self):
         """建立登入頁面 (DRY - 單一方法負責登入 UI)"""
@@ -977,6 +994,83 @@ class MainWindow(ctk.CTk):
             show_update_dialog(self, update_info)
         else:
             logger.info("目前已是最新版本")
+
+    # === 測試模式相關方法 ===
+
+    def _load_mock_data(self):
+        """載入假數據（測試模式）"""
+        try:
+            from src.utils.mock_data import MockDataGenerator
+
+            logger.info("測試模式：載入假數據...")
+
+            # 生成假數據
+            attendance_records = MockDataGenerator.generate_attendance_records(30)
+            personal_records = MockDataGenerator.generate_personal_records(20)
+            personal_summary = MockDataGenerator.generate_personal_summary(
+                personal_records
+            )
+            punch_records = MockDataGenerator.generate_punch_records(30)
+
+            # 直接創建加班報表（不通過計算器，因為假數據已經有加班時數）
+            report = MockDataGenerator.generate_overtime_report(attendance_records)
+
+            # 設定資料
+            self.current_report = report
+            self.personal_records = personal_records
+            self.personal_summary = personal_summary
+            self.punch_records = punch_records
+
+            # 顯示資料
+            self._display_mock_data(report, personal_records, personal_summary, punch_records)
+
+            logger.info(
+                "測試模式：假數據載入完成 (%d 筆出勤, %d 筆個人記錄, %d 筆打卡)",
+                len(attendance_records),
+                len(personal_records),
+                len(punch_records),
+            )
+        except Exception as e:
+            logger.error(f"測試模式：載入假數據失敗: {e}", exc_info=True)
+            mb.showerror("錯誤", f"載入測試數據失敗: {e}")
+
+    def _display_mock_data(
+        self,
+        report: OvertimeReport,
+        personal_records: list,
+        personal_summary: PersonalRecordSummary,
+        punch_records: list,
+    ):
+        """顯示假數據到各個分頁"""
+        # 更新使用者資訊
+        if self._login_username:
+            self.user_label.configure(text=f"👤 {self._login_username}")
+
+        # 顯示統計卡片
+        self.stats_container.pack(fill="x", padx=spacing.lg, pady=(0, spacing.md))
+        self._update_statistics_cards(report)
+
+        # 顯示出勤記錄
+        self.attendance_tab.display_report(report)
+
+        # 顯示個人記錄
+        self.personal_record_tab.display_records(personal_records, personal_summary)
+
+        # 顯示打卡記錄
+        self.punch_record_tab.display_records(punch_records)
+
+        # 顯示加班申報（測試模式下禁用申報功能）
+        submission_records = report.to_submission_records()
+        self.overtime_tab.load_data(submission_records, None)  # session=None 在測試模式
+        
+        # 顯示測試模式提示
+        self.overtime_tab._show_status(
+            "⚠️ 測試模式：申報功能已禁用，此模式僅用於查看 UI",
+            colors.warning
+        )
+
+        # 更新時間戳記
+        self._update_timestamp()
 
     # === 工具方法 ===
 
