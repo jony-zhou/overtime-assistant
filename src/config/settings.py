@@ -10,7 +10,7 @@ class Settings:
     # SSP 系統
     SSP_BASE_URL: str = "https://ssp.teco.com.tw"
     ATTENDANCE_URL: str = "/FW99001Z.aspx"  # 出勤異常清單
-    OVERTIME_REPORT_URL: str = "/FW21001Z.aspx?Kind=B"  # 加班補報申請單
+    OVERTIME_REPORT_URL: str = "/FW21006Z.aspx?Kind=B"  # 加班補報申請單 (2026 新版)
     OVERTIME_STATUS_URL: str = "/FW21003Z.aspx"  # 個人紀錄查詢
     PERSONAL_RECORD_URL: str = "/FW21003Z.aspx"  # 個人紀錄查詢 (同 OVERTIME_STATUS_URL)
 
