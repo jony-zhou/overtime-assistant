@@ -72,33 +72,53 @@ class PersonalRecordParser:
         """
         soup = BeautifulSoup(html, "html.parser")
 
-        # 查找表格
-        table = soup.find("table", id="ContentPlaceHolder1_gvFlow211")
+        # 查找表格 (新版移除了 ContentPlaceHolder1 前綴)
+        table = soup.find("table", id="gvFlow211")
         if not table:
-            logger.warning("找不到個人記錄表格 (gvFlow211)")
-            return []
+            # 嘗試舊版 ID 以保持相容性
+            table = soup.find("table", id="ContentPlaceHolder1_gvFlow211")
+            if not table:
+                logger.warning("找不到個人記錄表格 (gvFlow211)")
+                return []
 
-        # 解析資料列
-        rows = table.find_all("tr", class_=["RowStyle", "AlternatingRowStyle_update"])
+        # 解析資料列 (新版不再依賴 class,改用 tbody > tr)
+        tbody = table.find("tbody")
+        if tbody:
+            rows = tbody.find_all("tr", recursive=False)
+        else:
+            # 若無 tbody,嘗試直接找 tr (排除表頭)
+            rows = [
+                tr
+                for tr in table.find_all("tr")
+                if not tr.find_parent("thead") and tr.find("td")
+            ]
+
         records = []
 
         for index, row in enumerate(rows):
             try:
-                # === 提取欄位 ===
+                # === 提取欄位 (新版使用固定 ID,不帶索引) ===
 
-                # 日期
-                date_span = row.find(
-                    "span", id=f"ContentPlaceHolder1_gvFlow211_lblOT_Date_{index}"
-                )
+                # 日期 (新版: lblD_OT_Date)
+                date_span = row.find("span", id="lblD_OT_Date")
+                if not date_span:
+                    # 嘗試舊版 ID
+                    date_span = row.find(
+                        "span", id=f"ContentPlaceHolder1_gvFlow211_lblOT_Date_{index}"
+                    )
                 if not date_span:
                     logger.warning("記錄 %d: 未找到日期欄位", index)
                     continue
                 date = date_span.get_text(strip=True)
 
-                # 加班內容 (優先使用 title 屬性)
-                content_span = row.find(
-                    "span", id=f"ContentPlaceHolder1_gvFlow211_lblOT_Describe_{index}"
-                )
+                # 加班內容 (新版: lblD_OT_Describe)
+                content_span = row.find("span", id="lblD_OT_Describe")
+                if not content_span:
+                    # 嘗試舊版 ID
+                    content_span = row.find(
+                        "span",
+                        id=f"ContentPlaceHolder1_gvFlow211_lblOT_Describe_{index}",
+                    )
                 content = ""
                 if content_span:
                     title_attr = content_span.get("title")
@@ -106,85 +126,74 @@ class PersonalRecordParser:
                         title_attr if title_attr else content_span.get_text(strip=True)
                     )
 
-                # 狀態欄位 (判斷是加班還是調休)
-                # 上層: 加班狀態 (Label9_X)
-                overtime_status_span = row.find(
-                    "span", id=f"ContentPlaceHolder1_gvFlow211_Label9_{index}"
-                )
-                overtime_status = (
-                    overtime_status_span.get_text(strip=True)
-                    if overtime_status_span
-                    else ""
-                )
-
-                # 下層: 調休狀態 (lblT_Change_X)
-                change_status_span = row.find(
-                    "span", id=f"ContentPlaceHolder1_gvFlow211_lblT_Change_{index}"
-                )
-                change_status = (
-                    change_status_span.get_text(strip=True)
-                    if change_status_span
-                    else ""
-                )
-
-                # 申報時數 - 上層: 加班時數 (lblOT_Minute_X)
-                overtime_span = row.find(
-                    "span", id=f"ContentPlaceHolder1_gvFlow211_lblOT_Minute_{index}"
-                )
+                # 申報時數 - 加班時數 (新版: lblD_OT_Minute_E)
+                overtime_span = row.find("span", id="lblD_OT_Minute_E")
+                if not overtime_span:
+                    # 嘗試舊版 ID
+                    overtime_span = row.find(
+                        "span", id=f"ContentPlaceHolder1_gvFlow211_lblOT_Minute_{index}"
+                    )
                 overtime_text = (
-                    overtime_span.get_text(strip=True) if overtime_span else ""
+                    overtime_span.get_text(strip=True) if overtime_span else "0"
                 )
                 overtime_hours = PersonalRecordParser._parse_hours(overtime_text)
 
-                # 申報時數 - 下層: 調休時數 (lblChange_Minute_X)
-                change_span = row.find(
-                    "span", id=f"ContentPlaceHolder1_gvFlow211_lblChange_Minute_{index}"
-                )
-                change_text = change_span.get_text(strip=True) if change_span else ""
+                # 申報時數 - 調休時數 (新版: lblD_Change_Minute_E)
+                change_span = row.find("span", id="lblD_Change_Minute_E")
+                if not change_span:
+                    # 嘗試舊版 ID
+                    change_span = row.find(
+                        "span",
+                        id=f"ContentPlaceHolder1_gvFlow211_lblChange_Minute_{index}",
+                    )
+                change_text = change_span.get_text(strip=True) if change_span else "0"
                 change_hours = PersonalRecordParser._parse_hours(change_text)
 
-                # 判斷申報類型 (根據哪個時數 > 0,或根據狀態欄位)
+                # 判斷申報類型 (根據時數判斷)
                 if overtime_hours > 0:
-                    report_type = overtime_status or "加班"
+                    report_type = "加班"
                     total_hours = overtime_hours
                 elif change_hours > 0:
-                    report_type = change_status or "調休"
+                    report_type = "調休"
                     total_hours = change_hours
                 else:
-                    # 兩個都是 0,優先使用有狀態文字的那個
-                    if overtime_status:
-                        report_type = overtime_status
-                        total_hours = 0.0
-                    elif change_status:
-                        report_type = change_status
-                        total_hours = 0.0
-                    else:
-                        report_type = ""
-                        total_hours = 0.0
+                    report_type = ""
+                    total_hours = 0.0
 
-                # 當月累計
-                monthly_span = row.find(
-                    "span", id=f"ContentPlaceHolder1_gvFlow211_lblOT_Manhour_{index}"
-                )
+                # 當月累計 (新版: lblD_OT_Manhour)
+                monthly_span = row.find("span", id="lblD_OT_Manhour")
+                if not monthly_span:
+                    # 嘗試舊版 ID
+                    monthly_span = row.find(
+                        "span",
+                        id=f"ContentPlaceHolder1_gvFlow211_lblOT_Manhour_{index}",
+                    )
                 monthly_text = (
                     monthly_span.get_text(strip=True) if monthly_span else "0"
                 )
                 monthly_total = PersonalRecordParser._parse_hours(monthly_text)
 
-                # 當季累計
-                quarterly_span = row.find(
-                    "span", id=f"ContentPlaceHolder1_gvFlow211_lblOT_Monhour_{index}"
-                )
+                # 當季累計 (新版: lblD_OT_Manhour_T)
+                quarterly_span = row.find("span", id="lblD_OT_Manhour_T")
+                if not quarterly_span:
+                    # 嘗試舊版 ID
+                    quarterly_span = row.find(
+                        "span",
+                        id=f"ContentPlaceHolder1_gvFlow211_lblOT_Monhour_{index}",
+                    )
                 quarterly_text = (
                     quarterly_span.get_text(strip=True) if quarterly_span else "0"
                 )
                 quarterly_total = PersonalRecordParser._parse_hours(quarterly_text)
 
-                # 簽核狀態
-                status_span = row.find(
-                    "span",
-                    id=f"ContentPlaceHolder1_gvFlow211_lblProcess_Flag_Text_{index}",
-                )
+                # 簽核狀態 (新版: lblD_Flag)
+                status_span = row.find("span", id="lblD_Flag")
+                if not status_span:
+                    # 嘗試舊版 ID
+                    status_span = row.find(
+                        "span",
+                        id=f"ContentPlaceHolder1_gvFlow211_lblProcess_Flag_Text_{index}",
+                    )
                 status = (
                     status_span.get_text(strip=True).replace("<br>", " ")
                     if status_span
