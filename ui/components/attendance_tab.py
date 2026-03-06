@@ -230,7 +230,10 @@ class AttendanceTab(ctk.CTkFrame):
 
             self.stats_label.configure(text=stats_text)
         else:
-            self.stats_label.configure(text="📊 無異常記錄")
+            # 友善的空狀態顯示
+            self.stats_label.configure(
+                text="✅ 太好了！本月沒有出勤異常記錄", text_color=colors.success
+            )
 
     def copy_total_hours(self):
         """複製總加班時數到剪貼簿"""

@@ -279,6 +279,11 @@ class OvertimeReportTab(ctk.CTkFrame):
         self.submission_records = submission_records
         self.session = session
 
+        # 如果沒有記錄，直接顯示友善的空狀態
+        if not submission_records:
+            self._show_empty_state()
+            return
+
         # 顯示載入狀態
         self._show_loading_state()
 
@@ -309,6 +314,31 @@ class OvertimeReportTab(ctk.CTkFrame):
 
         # 更新狀態訊息
         self._show_status("🔍 正在查詢已申請狀態...", colors.info)
+
+    def _show_empty_state(self):
+        """顯示友善的空狀態（無異常記錄時）"""
+        # 清空容器
+        for widget in self.records_container.winfo_children():
+            widget.destroy()
+
+        self.record_content_entries.clear()
+
+        # 顯示空狀態提示
+        empty_label = ctk.CTkLabel(
+            self.records_container,
+            text="✅ 太好了！本月沒有出勤異常\n\n無需申報加班補休",
+            **get_font_config("body"),
+            text_color=colors.success,
+            justify="center",
+        )
+        empty_label.pack(expand=True, pady=spacing.xl)
+
+        # 禁用按鈕
+        self.submit_button.configure(state="disabled")
+        self.select_all_button.configure(state="disabled")
+
+        # 更新狀態訊息
+        self._show_status("✅ 無異常記錄", colors.success)
 
     def _load_submitted_status(self):
         """背景載入已申請狀態"""
@@ -344,13 +374,8 @@ class OvertimeReportTab(ctk.CTkFrame):
             widget.destroy()
 
         if not self.submission_records:
-            self.empty_label = ctk.CTkLabel(
-                self.records_container,
-                text="尚無加班記錄",
-                **get_font_config("body"),
-                text_color=colors.text_secondary,
-            )
-            self.empty_label.pack(pady=spacing.lg)
+            # 使用新的空狀態顯示方法
+            self._show_empty_state()
             return
 
         # 建立每筆記錄的 UI

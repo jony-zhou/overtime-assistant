@@ -101,7 +101,7 @@ class MainWindow(ctk.CTk):
         """初始化視窗設定 (Single Responsibility)"""
         title = f"TECO SSP 加班助手 v{self.version}"
         if self.test_mode:
-            title += " [測試模式]" 
+            title += " [測試模式]"
         self.title(title)
         self.geometry("1200x900")
 
@@ -668,7 +668,10 @@ class MainWindow(ctk.CTk):
             self.punch_record_tab.display_records(punch_records)
             logger.info("打卡記錄顯示完成: %d 筆", len(punch_records))
 
-        if report and report.records:
+        # 即使沒有異常記錄，只要有個人記錄或已申請記錄，也應更新統計卡片
+        has_data = (report and report.records) or personal_records or submitted_records
+
+        if has_data:
             self._handle_successful_fetch(report)
         else:
             self._handle_failed_fetch(error)
@@ -677,15 +680,20 @@ class MainWindow(ctk.CTk):
         """處理成功的資料抓取 (載入資料到分頁)"""
         self.current_report = report
 
-        # 顯示並更新統計卡片
+        # 顯示並更新統計卡片（即使沒有異常記錄也要更新）
         self.stats_container.pack(fill="x", padx=spacing.lg, pady=(0, spacing.md))
         self._update_statistics_cards(report)
 
-        # 載入資料到異常清單分頁
+        # 載入資料到異常清單分頁（包含空狀態處理）
         self.attendance_tab.display_report(report)
 
-        # 載入資料到加班補報分頁
-        submission_records = report.to_submission_records()
+        # 載入資料到加班補報分頁（包含空狀態處理）
+        if report and report.records:
+            submission_records = report.to_submission_records()
+        else:
+            submission_records = []  # 空列表觸發友善的空狀態顯示
+            logger.info("沒有出勤異常記錄")
+
         if self.auth_service and hasattr(self.auth_service, "get_session"):
             session = self.auth_service.get_session()
             self.overtime_tab.load_data(submission_records, session)
@@ -1022,7 +1030,9 @@ class MainWindow(ctk.CTk):
             self.punch_records = punch_records
 
             # 顯示資料
-            self._display_mock_data(report, personal_records, personal_summary, punch_records)
+            self._display_mock_data(
+                report, personal_records, personal_summary, punch_records
+            )
 
             logger.info(
                 "測試模式：假數據載入完成 (%d 筆出勤, %d 筆個人記錄, %d 筆打卡)",
@@ -1062,11 +1072,10 @@ class MainWindow(ctk.CTk):
         # 顯示加班申報（測試模式下禁用申報功能）
         submission_records = report.to_submission_records()
         self.overtime_tab.load_data(submission_records, None)  # session=None 在測試模式
-        
+
         # 顯示測試模式提示
         self.overtime_tab._show_status(
-            "⚠️ 測試模式：申報功能已禁用，此模式僅用於查看 UI",
-            colors.warning
+            "⚠️ 測試模式：申報功能已禁用，此模式僅用於查看 UI", colors.warning
         )
 
         # 更新時間戳記
