@@ -63,8 +63,8 @@ class OvertimeReportService:
                     {
                         "date": r.date,
                         "description": r.description,
-                        "overtime_minutes": r.overtime_minutes if r.is_overtime else 0,
-                        "change_minutes": r.change_minutes,
+                        "overtime_hours": r.overtime_hours if r.is_overtime else 0,
+                        "change_hours": r.overtime_hours if not r.is_overtime else 0,
                         "type": "加班" if r.is_overtime else "調休",
                     }
                     for r in records
@@ -120,8 +120,14 @@ class OvertimeReportService:
             # 構建表單資料
             form_data = self._build_form_data(soup, records)
 
-            # 加入送出按鈕
-            form_data["ctl00$ContentPlaceHolder1$btnCommit"] = "送出"
+            # 加入送出按鈕 (新版: ctl00$MainContent$btnCommit)
+            form_data["ctl00$MainContent$btnCommit"] = "送出"
+
+            # 記錄準備送出的表單資料（除了 ViewState 等大型欄位）
+            logger.debug("準備送出的表單資料:")
+            for key, value in form_data.items():
+                if not key.startswith("__"):  # 跳過 __VIEWSTATE 等內部欄位
+                    logger.debug(f"  {key} = {value}")
 
             # 送出表單
             response = session.post(
@@ -130,6 +136,9 @@ class OvertimeReportService:
                 timeout=self.settings.REQUEST_TIMEOUT,
                 verify=self.settings.VERIFY_SSL,
             )
+
+            logger.debug(f"表單送出響應狀態碼: {response.status_code}")
+            logger.debug(f"響應 URL: {response.url}")
 
             # 檢查送出結果
             success = self._check_submission_result(response.text)
@@ -165,28 +174,22 @@ class OvertimeReportService:
             for i in range(count):
                 logger.debug(f"正在增加第 {i + 1} 列...")
 
-                # 提取 ViewState
-                viewstate = soup.find("input", {"name": "__VIEWSTATE"})
-                viewstate_generator = soup.find(
-                    "input", {"name": "__VIEWSTATEGENERATOR"}
-                )
-                event_validation = soup.find("input", {"name": "__EVENTVALIDATION"})
+                # 提取所有隱藏欄位（確保表單狀態完整）
+                post_data = {}
+                hidden_inputs = soup.find_all("input", {"type": "hidden"})
+                for hidden_input in hidden_inputs:
+                    name = hidden_input.get("name")
+                    value = hidden_input.get("value", "")
+                    if name:
+                        post_data[name] = value
 
-                if not viewstate:
+                # 確認必要欄位存在
+                if "__VIEWSTATE" not in post_data:
                     raise ValueError("找不到 ViewState")
 
-                # 準備 PostBack 資料 (觸發「增加列」)
-                post_data = {
-                    "__EVENTTARGET": "ctl00$ContentPlaceHolder1$lbgvAddRowi",
-                    "__EVENTARGUMENT": "",
-                    "__VIEWSTATE": viewstate["value"],
-                    "__VIEWSTATEGENERATOR": (
-                        viewstate_generator["value"] if viewstate_generator else ""
-                    ),
-                    "__EVENTVALIDATION": (
-                        event_validation["value"] if event_validation else ""
-                    ),
-                }
+                # 設置 PostBack 目標（觸發「增加列」）
+                post_data["__EVENTTARGET"] = "ctl00$MainContent$lbtnAddRowi"
+                post_data["__EVENTARGUMENT"] = ""
 
                 # 發送 PostBack 請求
                 response = session.post(
@@ -219,51 +222,72 @@ class OvertimeReportService:
         Returns:
             表單資料字典
         """
-        # 提取 ViewState 等必要欄位
-        viewstate = soup.find("input", {"name": "__VIEWSTATE"})
-        viewstate_generator = soup.find("input", {"name": "__VIEWSTATEGENERATOR"})
-        event_validation = soup.find("input", {"name": "__EVENTVALIDATION"})
+        # 提取所有隱藏欄位（包括 ViewState 和其他 ASP.NET 狀態欄位）
+        form_data = {}
 
-        if not viewstate:
-            raise ValueError("找不到 ViewState")
+        # 提取所有 input[type="hidden"] 欄位
+        hidden_inputs = soup.find_all("input", {"type": "hidden"})
+        for hidden_input in hidden_inputs:
+            name = hidden_input.get("name")
+            value = hidden_input.get("value", "")
+            if name:
+                form_data[name] = value
+                logger.debug(
+                    f"提取隱藏欄位: {name} = {value[:50] if len(value) > 50 else value}"
+                )
 
-        form_data = {
-            "__VIEWSTATE": viewstate["value"],
-            "__VIEWSTATEGENERATOR": (
-                viewstate_generator["value"] if viewstate_generator else ""
-            ),
-            "__EVENTVALIDATION": event_validation["value"] if event_validation else "",
-        }
+        # 提取所有 select 下拉選單的當前值
+        selects = soup.find_all("select")
+        for select in selects:
+            name = select.get("name")
+            if name:
+                selected_option = select.find("option", selected=True)
+                value = selected_option.get("value", "") if selected_option else ""
+                form_data[name] = value
+                logger.debug(f"提取下拉選單: {name} = {value}")
 
-        # 填寫每筆記錄 (第一筆從 ctl03 開始,0-based index)
+        # 提取所有 textarea 的當前值（但稍後會被覆蓋）
+        textareas = soup.find_all("textarea")
+        for textarea in textareas:
+            name = textarea.get("name")
+            if name:
+                value = textarea.get_text(strip=True)
+                form_data[name] = value
+
+        # 確認必要的 ViewState 欄位存在
+        if "__VIEWSTATE" not in form_data:
+            raise ValueError("找不到 __VIEWSTATE 欄位")
+
+        # 填寫每筆記錄 (第一筆從 ctl02 開始,新版從 ctl02,舊版從 ctl03)
+        # 新版使用 MainContent 前綴
         for index, record in enumerate(records):
-            ctl_index = f"{index + 3:02d}"  # 03, 04, 05...
+            ctl_index = f"{index + 2:02d}"  # 02, 03, 04... (新版從 02 開始)
 
             # 日期
-            form_data[
-                f"ctl00$ContentPlaceHolder1$gvFlow211i$ctl{ctl_index}$txtOT_Datei"
-            ] = record.date
+            form_data[f"ctl00$MainContent$gvFlow211i$ctl{ctl_index}$txtOT_Datei"] = (
+                record.date
+            )
 
             # 加班內容
             form_data[
-                f"ctl00$ContentPlaceHolder1$gvFlow211i$ctl{ctl_index}$txtOT_Describei"
+                f"ctl00$MainContent$gvFlow211i$ctl{ctl_index}$txtOT_Describei"
             ] = record.description
 
-            # 加班或調休時數 (使用小時,取到小數點第二位)
+            # 加班或調休時數（雖然欄位名稱是 Minute，實際接受小時值）
             if record.is_overtime:
                 form_data[
-                    f"ctl00$ContentPlaceHolder1$gvFlow211i$ctl{ctl_index}$txtOT_Minutei"
-                ] = f"{record.overtime_hours:.2f}"
+                    f"ctl00$MainContent$gvFlow211i$ctl{ctl_index}$txtOT_Minutei"
+                ] = str(record.overtime_hours)
                 form_data[
-                    f"ctl00$ContentPlaceHolder1$gvFlow211i$ctl{ctl_index}$txtChange_Minutei"
+                    f"ctl00$MainContent$gvFlow211i$ctl{ctl_index}$txtChange_Minutei"
                 ] = "0"
             else:
                 form_data[
-                    f"ctl00$ContentPlaceHolder1$gvFlow211i$ctl{ctl_index}$txtOT_Minutei"
+                    f"ctl00$MainContent$gvFlow211i$ctl{ctl_index}$txtOT_Minutei"
                 ] = "0"
                 form_data[
-                    f"ctl00$ContentPlaceHolder1$gvFlow211i$ctl{ctl_index}$txtChange_Minutei"
-                ] = f"{record.overtime_hours:.2f}"
+                    f"ctl00$MainContent$gvFlow211i$ctl{ctl_index}$txtChange_Minutei"
+                ] = str(record.overtime_hours)
 
         return form_data
 
@@ -280,25 +304,79 @@ class OvertimeReportService:
         try:
             soup = BeautifulSoup(html, "html.parser")
 
+            # 檢查是否有成功訊息
+            success_indicators = [
+                "送出成功",
+                "申請成功",
+                "已送出",
+                "已完成",
+            ]
+
             # 檢查是否有明確的錯誤訊息
             error_indicators = [
                 "系統錯誤",
                 "送出失敗",
                 "申請失敗",
+                "欄位錯誤",
+                "資料錯誤",
             ]
 
             page_text = soup.get_text()
 
-            # 只檢查明確的錯誤訊息,其他情況視為成功
+            # 先檢查成功指標
+            for indicator in success_indicators:
+                if indicator in page_text:
+                    logger.info(f"✓ 發現成功指標: {indicator}")
+                    return True
+
+            # 再檢查錯誤指標
             for indicator in error_indicators:
                 if indicator in page_text:
-                    logger.error("發現錯誤指標: %s", indicator)
+                    logger.error(f"✗ 發現錯誤指標: {indicator}")
                     return False
 
-            # 沒有明確錯誤訊息,視為送出成功
-            logger.info("✓ 表單送出成功 (未發現錯誤訊息)")
+            # 檢查表單是否已清空（成功提交的特徵）
+            # 如果找不到輸入表格，可能是已重定向到成功頁面
+            input_table = soup.find("table", {"id": "MainContent_gvFlow211i"})
+            if not input_table:
+                logger.info("✓ 表單已清空或重定向，視為成功")
+                return True
+
+            # 沒有明確指標，檢查表單內容
+            # 如果所有輸入欄位都是空的或預設值，可能是提交成功後清空了
+            input_fields = input_table.find_all("input", {"type": "text"})
+            if input_fields:
+                has_content = any(
+                    field.get("value") and field.get("value") != "0"
+                    for field in input_fields
+                )
+                if not has_content:
+                    logger.info("✓ 表單已清空，視為提交成功")
+                    return True
+
+            # 無法確定結果，記錄警告
+            logger.warning("⚠ 無法明確判斷提交結果，預設視為成功")
+            logger.debug(f"頁面文字前 500 字元: {page_text[:500]}")
+
+            # 輸出響應頁面的 HTML 到檔案以便調試
+            try:
+                import os
+                from datetime import datetime
+
+                debug_dir = "logs/debug"
+                os.makedirs(debug_dir, exist_ok=True)
+                debug_file = os.path.join(
+                    debug_dir,
+                    f"submission_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                )
+                with open(debug_file, "w", encoding="utf-8") as f:
+                    f.write(html)
+                logger.info(f"響應頁面已保存至: {debug_file}")
+            except Exception as save_error:
+                logger.debug(f"無法保存響應頁面: {save_error}")
+
             return True
 
         except Exception as error:
-            logger.error("檢查送出結果失敗: %s", error)
+            logger.error(f"✗ 檢查送出結果失敗: {error}")
             return False

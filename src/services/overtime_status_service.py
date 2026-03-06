@@ -104,50 +104,81 @@ class OvertimeStatusService:
         records = {}
 
         try:
-            # 找到表格
-            table = soup.find("table", {"id": "ContentPlaceHolder1_gvFlow211"})
+            # 找到表格 (新版移除了 ContentPlaceHolder1 前綴)
+            table = soup.find("table", id="gvFlow211")
             if not table:
-                logger.warning("找不到狀態表格")
-                return records
+                # 嘗試舊版 ID 以保持相容性
+                table = soup.find("table", id="ContentPlaceHolder1_gvFlow211")
+                if not table:
+                    logger.warning("找不到狀態表格 (gvFlow211)")
+                    return records
 
-            # 解析每一列 (從 ctl02 開始,0-based index)
-            rows = table.find_all("tr")
-            for i, row in enumerate(rows[1:]):  # 跳過標題列
+            # 解析資料列 (新版不再依賴 class,改用 tbody > tr)
+            tbody = table.find("tbody")
+            if tbody:
+                rows = tbody.find_all("tr", recursive=False)
+            else:
+                # 若無 tbody,嘗試直接找 tr (排除表頭)
+                rows = [
+                    tr
+                    for tr in table.find_all("tr")
+                    if not tr.find_parent("thead") and tr.find("td")
+                ]
+
+            for index, row in enumerate(rows):
                 try:
-                    # 日期: ContentPlaceHolder1_gvFlow211_lblOT_Date_N
-                    date_span = row.find(
-                        "span", {"id": f"ContentPlaceHolder1_gvFlow211_lblOT_Date_{i}"}
-                    )
+                    # === 提取欄位 (新版使用固定 ID,不帶索引) ===
+
+                    # 日期 (新版: lblD_OT_Date)
+                    date_span = row.find("span", id="lblD_OT_Date")
                     if not date_span:
+                        # 嘗試舊版 ID
+                        date_span = row.find(
+                            "span",
+                            id=f"ContentPlaceHolder1_gvFlow211_lblOT_Date_{index}",
+                        )
+                    if not date_span:
+                        logger.warning("記錄 %d: 未找到日期欄位", index)
                         continue
 
                     date = date_span.get_text(strip=True)
 
-                    # 狀態: ContentPlaceHolder1_gvFlow211_lblProcess_Flag_Text_N
-                    status_span = row.find(
-                        "span",
-                        {
-                            "id": f"ContentPlaceHolder1_gvFlow211_lblProcess_Flag_Text_{i}"
-                        },
+                    # 狀態 (新版: lblD_Flag)
+                    status_span = row.find("span", id="lblD_Flag")
+                    if not status_span:
+                        # 嘗試舊版 ID
+                        status_span = row.find(
+                            "span",
+                            id=f"ContentPlaceHolder1_gvFlow211_lblProcess_Flag_Text_{index}",
+                        )
+                    status = (
+                        status_span.get_text(strip=True).replace("<br>", " ")
+                        if status_span
+                        else "未知"
                     )
-                    status = status_span.get_text(strip=True) if status_span else "未知"
 
-                    # 加班時數: ContentPlaceHolder1_gvFlow211_lblOT_Minute_N
-                    overtime_span = row.find(
-                        "span",
-                        {"id": f"ContentPlaceHolder1_gvFlow211_lblOT_Minute_{i}"},
-                    )
+                    # 加班時數 (新版: lblD_OT_Minute_E)
+                    overtime_span = row.find("span", id="lblD_OT_Minute_E")
+                    if not overtime_span:
+                        # 嘗試舊版 ID
+                        overtime_span = row.find(
+                            "span",
+                            id=f"ContentPlaceHolder1_gvFlow211_lblOT_Minute_{index}",
+                        )
                     overtime_minutes = (
                         float(overtime_span.get_text(strip=True))
                         if overtime_span and overtime_span.get_text(strip=True)
                         else 0.0
                     )
 
-                    # 調休時數: ContentPlaceHolder1_gvFlow211_lblChange_Minute_N
-                    change_span = row.find(
-                        "span",
-                        {"id": f"ContentPlaceHolder1_gvFlow211_lblChange_Minute_{i}"},
-                    )
+                    # 調休時數 (新版: lblD_Change_Minute_E)
+                    change_span = row.find("span", id="lblD_Change_Minute_E")
+                    if not change_span:
+                        # 嘗試舊版 ID
+                        change_span = row.find(
+                            "span",
+                            id=f"ContentPlaceHolder1_gvFlow211_lblChange_Minute_{index}",
+                        )
                     change_minutes = (
                         float(change_span.get_text(strip=True))
                         if change_span and change_span.get_text(strip=True)
@@ -166,7 +197,7 @@ class OvertimeStatusService:
                     logger.debug(f"解析記錄: {record}")
 
                 except Exception as e:
-                    logger.warning(f"解析第 {i} 列失敗: {e}")
+                    logger.warning(f"解析第 {index} 列失敗: {e}")
                     continue
 
             return records
