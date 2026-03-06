@@ -37,7 +37,7 @@ class AuthService:
         Returns:
             bool: 登入是否成功
         """
-        login_url = f"{self.settings.SSP_BASE_URL}/index.aspx"
+        login_url = f"{self.settings.SSP_BASE_URL}/default.aspx"
 
         try:
             logger.info("正在連接登入頁面...")
@@ -66,9 +66,9 @@ class AuthService:
                 "__EVENTVALIDATION": (
                     event_validation["value"] if event_validation else ""
                 ),
-                "ctl00$lblAccount": username,
-                "ctl00$lblPassWord": password,
-                "ctl00$Submit": "送出",
+                "ctl00$txtAccount": username,
+                "ctl00$txtPassword": password,
+                "ctl00$btnSubmit": "送出",
             }
 
             logger.info("正在驗證登入資訊...")
