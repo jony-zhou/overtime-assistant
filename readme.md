@@ -1,27 +1,58 @@
-# TECO SSP 加班時數計算器
+# TECO SSP 加班時數計算器 v1.3.1
+
+## 版本資訊
+
+**最新版本:** v1.3.1 - SSP 2026 HTML 結構相容性修正  
+**發布日期:** 2026-03-09  
+**相容性:** 支援 SSP 系統 2026 年 Q1 改版後的新版網頁結構
 
 ## 功能說明
 
 現代化的圖形介面應用程式,自動登入 TECO SSP 系統,提供以下功能:
 
 1. **📅 出勤異常清單**: 抓取出勤資料,自動計算每日加班時數
-2. **⚙️ 加班補報自動填寫**: 一鍵填寫加班補報申請單,大幅節省時間
-3. **📊 統計儀表板**: 即時顯示加班統計資訊
-4. **💾 Excel 匯出**: 匯出詳細報表供後續使用
+2. **🕒 打卡記錄查詢**: 顯示本月打卡記錄 (支援 2026 新版日曆格式)
+3. **⚙️ 加班補報自動填寫**: 一鍵填寫加班補報申請單,大幅節省時間
+4. **📊 個人記錄查詢**: 查看已申請的加班補報記錄與統計
+5. **💾 Excel 匯出**: 匯出詳細報表供後續使用
 
 ### 📸 應用程式截圖
 
 #### 📅 本月出勤異常
-![本月出勤異常](assets/readme/attendance-abnormalities-v1.2.0.png)
+> **📸 需要補充截圖:** `assets/readme/attendance-abnormalities-v1.3.1.png`  
+> 請擷取「出勤異常」分頁畫面,包含異常記錄列表與統計卡片
+
+![本月出勤異常](assets/readme/attendance-abnormalities-v1.3.1.png)
+
+#### 🕒 本月打卡記錄 (v1.3.1 新增)
+> **📸 需要補充截圖:** `assets/readme/punch-records-v1.3.1.png`  
+> 請擷取「出勤異常」分頁中的「打卡記錄」區塊,顯示 3-7 筆打卡記錄
+
+![本月打卡記錄](assets/readme/punch-records-v1.3.1.png)
 
 #### ⚙️ 加班時數補報
-![加班時數補報](assets/readme/reporting-v1.2.0.png)
+> **📸 需要補充截圖:** `assets/readme/overtime-report-v1.3.1.png`  
+> 請擷取「加班補報」分頁畫面,包含表單填寫介面與範本選單
 
-#### 📊 個人紀錄
-![個人紀錄](assets/readme/overtime-record-v1.2.0.png)
+![加班時數補報](assets/readme/overtime-report-v1.3.1.png)
 
-### GUI 版本特色 (v1.2.0)
+#### 📊 個人記錄
+> **📸 需要補充截圖:** `assets/readme/personal-record-v1.3.1.png`  
+> 請擷取「個人記錄」分頁畫面,顯示已申請記錄與統計資訊
 
+![個人記錄](assets/readme/personal-record-v1.3.1.png)
+
+### GUI 版本特色 (v1.3.1)
+
+- 🆕 **SSP 2026 相容性**: 完整支援 SSP 系統 2026 年 Q1 改版後的新版網頁結構
+- 🕒 **打卡記錄顯示**: 新增打卡記錄查詢,支援日曆格式解析 (data-popup 屬性)
+- ✅ **完整表單送出**: 修正加班申報表單送出機制,提取所有必要欄位
+- 📊 **統計卡片優化**: 修正資料來源判斷邏輯,即使無異常也顯示統計
+- 🎨 **友善空狀態**: 無異常時顯示綠色成功訊息 "✅ 太好了!本月沒有出勤異常"
+- 🔍 **Debug 功能**: 表單送出時自動儲存響應 HTML 至 logs/debug/
+- 🛡️ **Fallback 機制**: 雙重 ID 查找,向後相容舊版 HTML 結構
+
+#### v1.2.0 既有特色
 - 🎨 **專業 UI/UX 設計**: 全新設計系統,統一視覺風格
 - ⚙️ **加班補報自動填寫**: 智慧填寫加班申請表單,降低重複作業
 - 📋 **已申請狀態查詢**: 自動查詢並標記已申請的記錄
@@ -38,7 +69,7 @@
 - 💾 **Excel 匯出**: 一鍵匯出報表到 Excel 檔案
 - 📝 **即時載入狀態**: 清楚顯示操作結果和 "⏳ 正在載入..." 狀態
 - 🏗️ **SOLID 原則**: 遵循軟體工程最佳實踐
-- ✅ **完整測試**: 67 單元測試,確保程式品質
+- ✅ **完整測試**: 95 單元測試,確保程式品質
 - 📦 **獨立執行檔**: 支援打包成單一 EXE,無需安裝 Python
 - 🔄 **自動更新檢查**: 啟動時自動檢查 GitHub 最新版本,有新版本時通知
 
@@ -61,10 +92,15 @@
 
 直接執行打包好的程式:
 ```bash
-dist\overtime-assistant-1.2.0.exe
+dist\overtime-assistant-1.3.1.exe
 ```
 
 **提示**: 檔名包含版本號,每次更新後版本號會自動變更
+
+**系統需求**:
+- Windows 10/11 (64-bit)
+- 記憶體: 建議 4GB 以上
+- 網路: 需連線至 TECO SSP 系統
 
 ### 方法 2: 從原始碼執行
 
@@ -82,12 +118,14 @@ python app.py
 
 ## 使用流程
 
-### 加班補報模式 (v1.2.0+)
+### 加班補報模式 (v1.3.1)
 
-1. **啟動程式**: 執行 `TECO加班計算器.exe` 或 `python app.py`
+1. **啟動程式**: 執行 `overtime-assistant-1.3.1.exe` 或 `python app.py`
 2. **登入系統**: 在登入介面輸入 SSP 帳號和密碼,點擊「登入」
 3. **自動載入**: 程式自動抓取出勤資料並查詢已申請狀態
-4. **檢視異常**: 預設顯示「📅 異常清單」分頁,查看出勤異常和加班時數
+4. **檢視異常**: 預設顯示「📅 異常清單」分頁
+   - 查看出勤異常記錄和加班時數
+   - 向下捲動可查看「🕒 打卡記錄」區塊 (顯示本月 3-7 筆打卡記錄)
 5. **切換補報**: 點擊「⚙️ 加班補報」分頁,檢視可補報的記錄
    - ✅ 綠色勾選: 將會送出
    - ⚠️ 灰色禁用: 已申請或審核中
@@ -267,14 +305,14 @@ ui/
 編輯 `src/core/version.py`:
 
 ```python
-VERSION = "1.2.0"  # 修改版本號
-VERSION_NAME = "加班補報自動填寫 (正式版)"
+VERSION = "1.3.1"  # 修改版本號
+VERSION_NAME = "SSP 2026 HTML 結構相容性修正"
 ```
 
 重新封裝時會自動使用新版本號:
 ```bash
 python -m PyInstaller overtime_calculator.spec --clean
-# 產生: overtime-assistant-1.2.0.exe
+# 產生: overtime-assistant-1.3.1.exe
 ```
 
 詳細版本管理說明請參考 [docs/development/VERSION_MANAGEMENT.md](docs/development/VERSION_MANAGEMENT.md)
@@ -368,6 +406,65 @@ logger.setLevel(logging.DEBUG)  # DEBUG, INFO, WARNING, ERROR
 本程式僅供個人使用,請勿用於非法用途。使用本程式所產生的任何後果由使用者自行承擔。
 
 ## 更新記錄
+
+### v1.3.1 (2026/03/09): SSP 2026 HTML 結構相容性修正 ✅🔧
+
+**重要更新**:
+- 🆕 **SSP 2026 相容性**: 完整支援 SSP 系統 2026 年 Q1 改版後的新版網頁結構
+- 🕒 **打卡記錄顯示**: 新增打卡記錄查詢,支援日曆格式解析 (data-popup 屬性)
+- ✅ **表單送出修正**: 修正加班申報表單送出機制,提取所有必要欄位 (ASP.NET PostBack 完整支援)
+- 📊 **統計卡片優化**: 修正資料來源判斷邏輯,即使無異常也顯示統計
+- 🎨 **友善空狀態**: 無異常時顯示綠色成功訊息 "✅ 太好了!本月沒有出勤異常"
+- 🔍 **Debug 功能**: 表單送出時自動儲存響應 HTML 至 `logs/debug/submission_response_*.html`
+- 🛡️ **Fallback 機制**: 雙重 ID 查找,向後相容舊版 HTML 結構
+
+**HTML 結構變更**:
+- 🔧 登入頁面: `index.aspx` → `default.aspx`, 表單欄位名稱更新
+- 🔧 ID 前綴: `ContentPlaceHolder1_*` → `MainContent_*` 或無前綴
+- 🔧 欄位 ID: 索引式 (`lblOT_Date_0`) → 固定式 (`lblD_OT_Date`)
+- 🔧 打卡記錄: 新增 `gvCalendar` 日曆格式支援
+
+**修改檔案** (10 個):
+- `src/core/version.py` - 版本號更新至 1.3.1
+- `src/config/settings.py` - 更新加班申報 URL
+- `src/services/auth_service.py` - 登入服務適配
+- `src/services/overtime_report_service.py` - 表單送出機制重構
+- `src/services/overtime_status_service.py` - 狀態查詢適配
+- `src/parsers/personal_record_parser.py` - 個人記錄解析器更新
+- `src/parsers/attendance_parser.py` - 出勤記錄解析器更新 (新增日曆格式)
+- `ui/main_window.py` - 統計卡片邏輯修正
+- `ui/components/attendance_tab.py` - 空狀態訊息優化
+- `ui/components/overtime_report_tab.py` - 新增空狀態顯示方法
+
+**測試驗證**:
+- ✅ 所有單元測試通過: 95 tests passed
+- ✅ 完整使用者測試通過 (登入、記錄查詢、打卡記錄、統計、申報)
+- ✅ 打包測試通過 (Exit Code: 0)
+
+**詳細說明**: [RELEASE_v1.3.1.md](docs/release/RELEASE_v1.3.1.md)
+
+**OpenSpec 提案**: [fix-ssp-html-structure-2026](openspec/changes/archive/fix-ssp-html-structure-2026/)
+
+---
+
+### v1.3.0 (2026/01/15): 統一資料同步機制與效能優化 🚀
+
+**重大更新**:
+- 🚀 **統一資料同步服務 (DataSyncService)**: 整合分散的資料來源,減少 40% HTTP 請求
+- ⚡ **5 分鐘快取機制**: 重新整理速度從 3 秒降至 < 0.001 秒 (提升 99%)
+- 📦 **統一資料模型**: `AttendanceSnapshot` 作為單一資料來源
+- 🛡️ **Stale-on-Error 容錯**: 網路錯誤時返回快取資料
+- 🔧 **個人記錄解析修正**: 支援雙層 HTML 結構 (加班/調休)
+
+**效能改進**:
+- HTTP 請求: 5 次 → 3 次 (減少 40%)
+- 首次載入: 14s → 13s (減少 7%)
+- 快取重新整理: 3s → < 0.001s (提升 99%)
+- 消除重複抓取
+
+**詳細說明**: [RELEASE_v1.3.0.md](docs/release/RELEASE_v1.3.0.md)
+
+---
 
 ### v1.2.0 (2025/11/28): 範本管理與正式釋出 ✅
 
