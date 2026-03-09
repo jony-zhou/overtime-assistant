@@ -238,10 +238,16 @@ class LoginFrame(ctk.CTkFrame):
 
         self.on_login(username, password, remember_me)
 
-    def set_loading(self, loading: bool):
-        """設定載入狀態"""
+    def set_loading(self, loading: bool, message: str = "登入中..."):
+        """
+        設定載入狀態
+
+        Args:
+            loading: 是否為載入狀態
+            message: 載入時顯示的訊息 (僅當 loading=True 時有效)
+        """
         if loading:
-            self.login_button.configure(state="disabled", text="登入中...")
+            self.login_button.configure(state="disabled", text=message)
             self.account_entry.configure(state="disabled")
             self.password_entry.configure(state="disabled")
             self.password_toggle_btn.configure(state="disabled")

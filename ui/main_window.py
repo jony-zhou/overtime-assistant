@@ -481,7 +481,7 @@ class MainWindow(ctk.CTk):
         - 不在 log 中記錄密碼
         - 使用安全的認證服務
         """
-        self.login_frame.set_loading(True)
+        self.login_frame.set_loading(True, "登入中...")
 
         # 儲存登入資訊 (密碼僅在記住我時儲存)
         self._login_username = username

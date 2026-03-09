@@ -8,8 +8,8 @@ from typing import Tuple
 
 
 # 當前版本號
-VERSION = "1.3.1"
-VERSION_NAME = "SSP 2026 HTML 結構相容性修正"
+VERSION = "1.3.2"
+VERSION_NAME = "登入驗證強化 (修正密碼錯誤仍能進入的 Bug)"
 
 
 @dataclass(frozen=True)
