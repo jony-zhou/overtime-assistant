@@ -86,7 +86,10 @@ class AuthService:
                 return False
 
             # 2. 檢查 URL 是否包含 default.aspx 或 FW99001Z.aspx
-            if "default.aspx" not in response.url and "FW99001Z.aspx" not in response.url:
+            if (
+                "default.aspx" not in response.url
+                and "FW99001Z.aspx" not in response.url
+            ):
                 logger.error("✗ 登入失敗: 未跳轉到正確頁面")
                 return False
 
@@ -138,7 +141,9 @@ class AuthService:
                 return (True, "")
 
             # 檢查是否有用戶資訊區塊
-            user_info = soup.find(id=lambda x: x and ("user" in x.lower() or "member" in x.lower()))
+            user_info = soup.find(
+                id=lambda x: x and ("user" in x.lower() or "member" in x.lower())
+            )
             if user_info:
                 logger.info("✓ Session 驗證成功 (找到用戶資訊)")
                 return (True, "")
