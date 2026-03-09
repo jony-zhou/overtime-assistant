@@ -13,6 +13,7 @@ v1.3.1 - SSP 2026 HTML 結構相容性修正
 本版本修正 TECO SSP 系統 2026 年 Q1 改版後的 HTML 結構變更所造成的相容性問題。SSP 網站進行了大規模的版型更新,導致原有的 HTML 解析器失效,本版本針對所有受影響的功能模組進行修正,確保系統能夠正常運作。
 
 **修正範圍包括:**
+
 - 登入服務 (URL 及表單欄位更新)
 - 個人加班記錄解析 (表格 ID 及欄位 ID 更新)
 - 出勤記錄解析 (異常記錄、打卡記錄、新增日曆格式支援)
@@ -54,7 +55,7 @@ URL:
 
 表單欄位:
 - lblAccount                      + txtAccount
-- lblPassWord                     + txtPassword  
+- lblPassWord                     + txtPassword
 - Submit                          + btnSubmit
 ```
 
@@ -63,7 +64,7 @@ URL:
 新版新增 `gvCalendar` 格式,使用 `data-popup` 屬性儲存刷卡時間:
 
 ```html
-<span data-popup="刷卡 09:02:15&lt;br&gt;刷卡 18:35:20">
+<span data-popup="刷卡 09:02:15&lt;br&gt;刷卡 18:35:20"></span>
 ```
 
 ---
@@ -73,6 +74,7 @@ URL:
 #### 2.1 登入服務 (auth_service.py)
 
 **修正項目:**
+
 - 登入 URL: `index.aspx` → `default.aspx`
 - 表單欄位名稱更新:
   - `lblAccount` → `txtAccount`
@@ -84,6 +86,7 @@ URL:
 #### 2.2 加班申報服務 (overtime_report_service.py)
 
 **修正項目:**
+
 - 表單資料提取: 改為提取**所有**隱藏欄位、下拉選單、文字區域 (原本只提取 ViewState/EventValidation/EventTarget/EventArgument)
 - 新增詳細的 debug 日誌輸出
 - 送出後自動儲存響應 HTML 至 `logs/debug/submission_response_*.html`
@@ -95,6 +98,7 @@ ASP.NET WebForms 的 PostBack 機制要求提交時必須包含頁面上的所�
 #### 2.3 加班狀態服務 (overtime_status_service.py)
 
 **修正項目:**
+
 - 表格 ID: `ContentPlaceHolder1_gvFlow211` → `gvFlow211` (含 fallback)
 - 欄位 ID 更新為固定格式:
   - `lblOT_Date_{index}` → `lblD_OT_Date`
@@ -111,6 +115,7 @@ ASP.NET WebForms 的 PostBack 機制要求提交時必須包含頁面上的所�
 #### 3.1 個人記錄解析器 (personal_record_parser.py)
 
 **修正項目:**
+
 - 表格 ID: `ContentPlaceHolder1_gvFlow211` → `gvFlow211` (含 fallback)
 - 欄位 ID 更新為固定格式:
   - `lblOT_Date_{index}` → `lblD_OT_Date`
@@ -126,6 +131,7 @@ ASP.NET WebForms 的 PostBack 機制要求提交時必須包含頁面上的所�
 **修正項目:**
 
 ##### (1) 異常記錄解析 (`parse_anomaly_records`)
+
 - 表格 ID: `ContentPlaceHolder1_gvWeb012` → `MainContent_gvWeb012` (含 fallback)
 - 欄位 ID 更新:
   - `lblWork_Date_{index}` → `lblAtt_Date`
@@ -135,6 +141,7 @@ ASP.NET WebForms 的 PostBack 機制要求提交時必須包含頁面上的所�
   - `lblNote_{index}` → `lblAtt_Note`
 
 ##### (2) 打卡記錄解析 (`parse_punch_records`)
+
 - **新增日曆格式支援** (`gvCalendar`)
   - 使用 `data-popup` 屬性提取刷卡時間
   - 正則表達式: `刷卡 (\d{2}:\d{2}:\d{2})`
@@ -146,7 +153,7 @@ ASP.NET WebForms 的 PostBack 機制要求提交時必須包含頁面上的所�
 
 ```html
 <span id="lblWork_Time_07" data-popup="刷卡 09:02:15&lt;br&gt;刷卡 18:35:20">
-    09:02~18:35
+  09:02~18:35
 </span>
 ```
 
@@ -164,16 +171,17 @@ punch_times = re.findall(r'刷卡 (\d{2}:\d{2}:\d{2})', data_popup)
 **問題:** 統計卡片在無異常記錄時不顯示資料
 
 **修正:**
+
 - 改進資料來源判斷邏輯:
 
 ```python
 # 修正前
 has_data = report and report.records
 
-# 修正後  
+# 修正後
 has_data = (
-    (report and report.records) 
-    or personal_records 
+    (report and report.records)
+    or personal_records
     or submitted_records
 )
 ```
@@ -213,18 +221,18 @@ OVERTIME_REPORT_URL = "/FW21006Z.aspx?Kind=B"
 
 ## 版本比較
 
-| 項目               | v1.3.0     | v1.3.1               |
-| ------------------ | ---------- | -------------------- |
-| SSP 2026 相容性    | ❌ 不相容  | ✅ 完全相容          |
-| 登入功能           | ❌ 失敗    | ✅ 正常              |
-| 個人記錄解析       | ❌ 失敗    | ✅ 正常 (5 筆記錄)   |
-| 打卡記錄解析       | ❌ 失敗    | ✅ 正常 (日曆格式)   |
-| 異常記錄解析       | ❌ 失敗    | ✅ 正常              |
-| 加班申報送出       | ❌ 失敗    | ✅ 正常 (完整欄位)   |
-| 統計卡片顯示       | ⚠️ 部分錯誤 | ✅ 正常              |
-| 空狀態訊息         | 普通       | ✅ 友善訊息 + 綠色   |
-| Debug 日誌         | 基礎       | ✅ 詳細 (含 HTML 儲存) |
-| Fallback 機制      | 無         | ✅ 雙重 ID 查找      |
+| 項目            | v1.3.0      | v1.3.1                 |
+| --------------- | ----------- | ---------------------- |
+| SSP 2026 相容性 | ❌ 不相容   | ✅ 完全相容            |
+| 登入功能        | ❌ 失敗     | ✅ 正常                |
+| 個人記錄解析    | ❌ 失敗     | ✅ 正常 (5 筆記錄)     |
+| 打卡記錄解析    | ❌ 失敗     | ✅ 正常 (日曆格式)     |
+| 異常記錄解析    | ❌ 失敗     | ✅ 正常                |
+| 加班申報送出    | ❌ 失敗     | ✅ 正常 (完整欄位)     |
+| 統計卡片顯示    | ⚠️ 部分錯誤 | ✅ 正常                |
+| 空狀態訊息      | 普通        | ✅ 友善訊息 + 綠色     |
+| Debug 日誌      | 基礎        | ✅ 詳細 (含 HTML 儲存) |
+| Fallback 機制   | 無          | ✅ 雙重 ID 查找        |
 
 ---
 
@@ -291,7 +299,7 @@ table = soup.find("table", id="gvFlow211")
 # 失敗則嘗試舊 ID
 if not table:
     table = soup.find("table", id="ContentPlaceHolder1_gvFlow211")
-    
+
 # 仍失敗則拋出錯誤
 if not table:
     raise ValueError("找不到表格")
@@ -406,6 +414,7 @@ form_data = {
 ### OpenSpec 提案
 
 本版本實作內容依據 OpenSpec 提案:
+
 - **提案編號**: fix-ssp-html-structure-2026
 - **提案文件**: `openspec/changes/fix-ssp-html-structure-2026/proposal.md`
 - **任務追蹤**: `openspec/changes/fix-ssp-html-structure-2026/tasks.md`
