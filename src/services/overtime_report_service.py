@@ -124,24 +124,49 @@ class OvertimeReportService:
             form_data["ctl00$MainContent$btnCommit"] = "送出"
 
             # 記錄準備送出的表單資料（除了 ViewState 等大型欄位）
-            logger.debug("準備送出的表單資料:")
+            logger.info("準備送出的表單主要欄位:")
+            # 記錄事件欄位和按鈕
+            logger.info(f"  __EVENTTARGET = '{form_data.get('__EVENTTARGET', 'N/A')}'")
+            logger.info(
+                f"  __EVENTARGUMENT = '{form_data.get('__EVENTARGUMENT', 'N/A')}'"
+            )
+            logger.info(
+                f"  提交按鈕 = '{form_data.get('ctl00$MainContent$btnCommit', 'N/A')}'"
+            )
+            # 記錄填寫的資料
             for key, value in form_data.items():
-                if not key.startswith("__"):  # 跳過 __VIEWSTATE 等內部欄位
+                if "gvFlow211i" in key and (
+                    "txtOT_Date" in key
+                    or "txtOT_Describe" in key
+                    or "txtOT_Minute" in key
+                ):
                     logger.debug(f"  {key} = {value}")
 
-            # 送出表單
+            # 送出表單（跟蹤重定向）
             response = session.post(
                 url,
                 data=form_data,
                 timeout=self.settings.REQUEST_TIMEOUT,
                 verify=self.settings.VERIFY_SSL,
+                allow_redirects=True,  # 確保跟蹤重定向
             )
 
-            logger.debug(f"表單送出響應狀態碼: {response.status_code}")
-            logger.debug(f"響應 URL: {response.url}")
+            logger.info(f"表單送出響應狀態碼: {response.status_code}")
+            logger.info(f"最終 URL: {response.url}")
+            logger.debug(
+                f"重定向歷史: {[r.url for r in response.history] if response.history else '無'}"
+            )
 
-            # 檢查送出結果
-            success = self._check_submission_result(response.text)
+            # 記錄回應頁面的摘要
+            soup_check = BeautifulSoup(response.text, "html.parser")
+            table_check = soup_check.find("table", {"id": "MainContent_gvFlow211i"})
+            if table_check:
+                logger.debug("✓ 回應頁面中找到表單表格")
+            else:
+                logger.debug("✗ 回應頁面中未找到表單表格")
+
+            # 檢查送出結果（同時傳遞 URL 和 HTML）
+            success = self._check_submission_result(response.url, response.text)
 
             if success:
                 logger.info(f"✓ 成功送出 {len(records)} 筆加班申請")
@@ -289,19 +314,33 @@ class OvertimeReportService:
                     f"ctl00$MainContent$gvFlow211i$ctl{ctl_index}$txtChange_Minutei"
                 ] = str(record.overtime_hours)
 
+        # 重要: 確保提交時清除事件欄位
+        # ASP.NET 需要 __EVENTTARGET 和 __EVENTARGUMENT 為空來正確識別表單提交
+        form_data["__EVENTTARGET"] = ""
+        form_data["__EVENTARGUMENT"] = ""
+
         return form_data
 
-    def _check_submission_result(self, html: str) -> bool:
+    def _check_submission_result(self, response_url: str, html: str) -> bool:
         """
         檢查表單送出結果
 
         Args:
+            response_url: 最終回應的 URL
             html: 回應的 HTML
 
         Returns:
             是否成功
         """
         try:
+            # 首先檢查 URL 重定向 - 這是最可靠的方式
+            # 成功提交會重定向到已申請記錄頁面 (FW21003Z.aspx)
+            if "FW21003Z" in response_url:
+                logger.info(f"✓ 檢測到重定向到記錄頁面: {response_url}")
+                return True
+
+            logger.debug(f"URL 未重定向到記錄頁面，URL: {response_url}")
+
             soup = BeautifulSoup(html, "html.parser")
 
             # 檢查是否有成功訊息
@@ -335,28 +374,26 @@ class OvertimeReportService:
                     logger.error(f"✗ 發現錯誤指標: {indicator}")
                     return False
 
-            # 檢查表單是否已清空（成功提交的特徵）
-            # 如果找不到輸入表格，可能是已重定向到成功頁面
+            # 檢查是否找到表單表格
+            # 如果在表單頁面但表格存在，說明沒有重定向成功
             input_table = soup.find("table", {"id": "MainContent_gvFlow211i"})
-            if not input_table:
-                logger.info("✓ 表單已清空或重定向，視為成功")
-                return True
+            if input_table:
+                # 如果表格存在，檢查是否有內容
+                input_fields = input_table.find_all("input", {"type": "text"})
+                if input_fields:
+                    # 統計有內容的欄位
+                    filled_fields = sum(
+                        1
+                        for field in input_fields
+                        if field.get("value") and field.get("value") not in ["0", ""]
+                    )
+                    logger.debug(f"表格在頁面上，有 {filled_fields} 個填寫的欄位")
 
-            # 沒有明確指標，檢查表單內容
-            # 如果所有輸入欄位都是空的或預設值，可能是提交成功後清空了
-            input_fields = input_table.find_all("input", {"type": "text"})
-            if input_fields:
-                has_content = any(
-                    field.get("value") and field.get("value") != "0"
-                    for field in input_fields
-                )
-                if not has_content:
-                    logger.info("✓ 表單已清空，視為提交成功")
-                    return True
-
-            # 無法確定結果，記錄警告
-            logger.warning("⚠ 無法明確判斷提交結果，預設視為成功")
-            logger.debug(f"頁面文字前 500 字元: {page_text[:500]}")
+            # ⚠️ 無法明確判斷 - 這時應該依賴 URL 檢查，如果 URL 沒變就是失敗
+            logger.warning(f"⚠️ 無法明確判斷提交結果，頁面 URL: {response_url}")
+            logger.warning(
+                f"⚠️ 請檢查是否在表單頁面上，如果仍在原表單頁面則表示提交失敗"
+            )
 
             # 輸出響應頁面的 HTML 到檔案以便調試
             try:
@@ -375,7 +412,8 @@ class OvertimeReportService:
             except Exception as save_error:
                 logger.debug(f"無法保存響應頁面: {save_error}")
 
-            return True
+            # URL 沒有重定向，返回失敗
+            return False
 
         except Exception as error:
             logger.error(f"✗ 檢查送出結果失敗: {error}")
