@@ -8,8 +8,8 @@ from typing import Tuple
 
 
 # 當前版本號
-VERSION = "1.3.2"
-VERSION_NAME = "登入驗證強化 (修正密碼錯誤仍能進入的 Bug)"
+VERSION = "1.3.3"
+VERSION_NAME = "加班單送出失敗判定修正"
 
 
 @dataclass(frozen=True)
